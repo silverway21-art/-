@@ -1,0 +1,6 @@
+{
+  "name": "Zion's Robot & Code Portfolio",
+  "description": "Cybernetic robotics and code portfolio showcasing Zion's competition journey, technical skills, and line tracing robot projects.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
