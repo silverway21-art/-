@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Terminal, Shield, ArrowUp } from 'lucide-react';
+import { Terminal, Shield, ArrowUp, Lock } from 'lucide-react';
 import { PortfolioInfo } from '../types';
 
 interface FooterProps {
   onOpenTerminal: () => void;
+  onOpenAdmin?: () => void;
   portfolioInfo?: PortfolioInfo;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onOpenTerminal, portfolioInfo }) => {
+export const Footer: React.FC<FooterProps> = ({ onOpenTerminal, onOpenAdmin, portfolioInfo }) => {
   const [showPrivacy, setShowPrivacy] = useState(false);
 
   const scrollToTop = () => {
@@ -27,7 +28,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerminal, portfolioInfo })
         </div>
 
         {/* Center Links */}
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
           <button
             onClick={() => setShowPrivacy(true)}
             className="hover:text-cyan-400 transition-colors uppercase tracking-wider flex items-center gap-1"
@@ -45,6 +46,19 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerminal, portfolioInfo })
             <Terminal size={12} />
             <span>TERMINAL ACCESS</span>
           </button>
+
+          {onOpenAdmin && (
+            <>
+              <span className="text-cyan-900">•</span>
+              <button
+                onClick={onOpenAdmin}
+                className="hover:text-cyan-300 text-slate-400 transition-colors uppercase tracking-wider flex items-center gap-1"
+              >
+                <Lock size={12} className="text-cyan-500" />
+                <span>ADMIN PORTAL</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Right Scroll Top */}

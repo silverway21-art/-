@@ -17,27 +17,35 @@ const SITE_CONFIG_KEY = 'zion_portfolio_site_config_v2';
 
 
 export function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+  return sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function getStoredUser(): AdminUser | null {
   try {
-    const raw = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY);
+    const raw = sessionStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-export function saveSession(token: string, user: AdminUser, persist: boolean = true) {
-  const storage = persist ? localStorage : sessionStorage;
-  storage.setItem(TOKEN_KEY, token);
-  storage.setItem(USER_KEY, JSON.stringify(user));
+export function saveSession(token: string, user: AdminUser, persist: boolean = false) {
+  // Always use sessionStorage so closing/reopening the page requires re-authentication
+  sessionStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+  
+  // Clean up any lingering localStorage tokens from previous versions
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem('zion_admin_token');
+  localStorage.removeItem('zion_admin_user');
 }
 
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem('zion_admin_token');
+  localStorage.removeItem('zion_admin_user');
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(USER_KEY);
 }

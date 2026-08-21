@@ -94,7 +94,7 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
     setErrorMsg('');
 
     try {
-      const result = await apiLogin(username.trim(), password.trim(), true);
+      const result = await apiLogin(username.trim(), password.trim(), false);
       if (result.success && result.user) {
         onLoginSuccess(result.user);
       } else {

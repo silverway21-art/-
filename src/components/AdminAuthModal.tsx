@@ -32,7 +32,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
     setErrorMsg(null);
 
     try {
-      const res = await apiLogin(usernameInput.trim(), passcodeInput.trim(), true);
+      const res = await apiLogin(usernameInput.trim(), passcodeInput.trim(), false);
       setIsLoading(false);
 
       if (res.success && res.user) {

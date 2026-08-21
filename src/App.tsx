@@ -76,8 +76,8 @@ export default function App() {
     return DEFAULT_SITE_CONFIG;
   });
 
-  // Admin authentication state (Persistent & Server Verified)
-  const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => getStoredUser());
+  // Admin authentication state: Start as null to ensure admin login screen is always required on entry
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
 
   // Modals state
   const [selectedProject, setSelectedProject] = useState<ProjectItem | null>(null);
@@ -104,16 +104,9 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  // Boot: Test connection, verify admin session, and load projects & site config from Database
+  // Boot: Test connection and load projects & site config from Database
   useEffect(() => {
     testFirebaseConnection();
-
-    // Verify session with server
-    apiCheckSession().then((res) => {
-      if (res.authenticated && res.user) {
-        setCurrentUser(res.user);
-      }
-    });
 
     // Load initial projects from server/Firestore
     apiGetProjects().then((items) => {
@@ -304,6 +297,7 @@ export default function App() {
         <Navbar 
           onOpenConnect={() => setIsConnectOpen(true)}
           onOpenTerminal={() => setIsTerminalOpen(true)}
+          onOpenAdmin={() => navigateTo('/admin')}
         />
 
         {/* Main Content */}
@@ -345,6 +339,7 @@ export default function App() {
         {/* Footer (Controlled via Admin CMS) */}
         <Footer 
           onOpenTerminal={() => setIsTerminalOpen(true)} 
+          onOpenAdmin={() => navigateTo('/admin')}
           portfolioInfo={siteConfig.portfolioInfo}
         />
       </div>
