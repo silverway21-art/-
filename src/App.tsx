@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { HeroSection } from './components/HeroSection';
 import { CyberDivider } from './components/CyberDivider';
@@ -14,17 +14,33 @@ import { AwardsSection } from './components/AwardsSection';
 import { Footer } from './components/Footer';
 import { ProjectDetailModal } from './components/ProjectDetailModal';
 import { AddProjectModal } from './components/AddProjectModal';
+import { EditProjectModal } from './components/EditProjectModal';
 import { InteractiveTerminalModal } from './components/InteractiveTerminalModal';
 import { ConnectModal } from './components/ConnectModal';
 import { AdminAuthModal } from './components/AdminAuthModal';
 import { AdminManagementModal } from './components/AdminManagementModal';
+import { AdminPortalPage } from './components/AdminPortalPage';
 import { PROJECT_ITEMS } from './data/portfolioData';
 import { ProjectItem, AdminUser } from './types';
-import { getCurrentSession, setActiveSession, ROOT_ADMIN_USER } from './data/adminAuth';
+import { 
+  apiCheckSession, 
+  apiLogout, 
+  apiGetProjects, 
+  apiAddProject, 
+  apiUpdateProject, 
+  apiDeleteProject, 
+  subscribeToProjects,
+  getStoredUser
+} from './lib/api';
+import { testFirebaseConnection } from './lib/firebase';
 
-const STORAGE_KEY = 'zion_portfolio_projects_v1';
+const STORAGE_KEY = 'zion_portfolio_projects_v2';
 
 export default function App() {
+  // Routing state
+  const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname);
+
+  // Projects state
   const [projects, setProjects] = useState<ProjectItem[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -35,62 +51,183 @@ export default function App() {
         }
       }
     } catch (e) {
-      console.warn('Failed to load projects from localStorage', e);
+      console.warn('Failed to load local projects cache', e);
     }
     return PROJECT_ITEMS;
   });
 
-  // Admin authentication state (Defaults to stored session or Root Super Admin)
-  const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
-    const session = getCurrentSession();
-    if (session.isAuthenticated && session.currentUser) {
-      return session.currentUser;
-    }
-    // Default to ROOT_ADMIN_USER for the owner's active session
-    setActiveSession(ROOT_ADMIN_USER);
-    return ROOT_ADMIN_USER;
-  });
+  // Admin authentication state (Persistent & Server Verified)
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => getStoredUser());
 
+  // Modals state
   const [selectedProject, setSelectedProject] = useState<ProjectItem | null>(null);
+  const [editingProject, setEditingProject] = useState<ProjectItem | null>(null);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState<boolean>(false);
+  const [isEditProjectOpen, setIsEditProjectOpen] = useState<boolean>(false);
   const [isTerminalOpen, setIsTerminalOpen] = useState<boolean>(false);
   const [isConnectOpen, setIsConnectOpen] = useState<boolean>(false);
   const [isAdminAuthOpen, setIsAdminAuthOpen] = useState<boolean>(false);
   const [isAdminManagementOpen, setIsAdminManagementOpen] = useState<boolean>(false);
 
-  // Sync projects to localStorage
+  // Synchronize Browser History Navigation (SPA Routing)
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateTo = useCallback((path: string) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(path);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  // Boot: Test connection, verify admin session, and load projects from Database
+  useEffect(() => {
+    testFirebaseConnection();
+
+    // Verify session with server
+    apiCheckSession().then((res) => {
+      if (res.authenticated && res.user) {
+        setCurrentUser(res.user);
+      }
+    });
+
+    // Load initial projects from server/Firestore
+    apiGetProjects().then((items) => {
+      if (items && items.length > 0) {
+        setProjects(items);
+      }
+    });
+
+    // Subscribe to real-time updates from Firestore
+    const unsubscribe = subscribeToProjects((liveProjects) => {
+      if (liveProjects && liveProjects.length > 0) {
+        setProjects(liveProjects);
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
+  // Save projects to local cache for instant reload
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
     } catch (e) {
-      console.warn('Failed to save projects to localStorage', e);
+      console.warn('Failed to cache projects', e);
     }
   }, [projects]);
 
-  const handleAddProject = (newProject: ProjectItem) => {
+  // Project CRUD Operations (Immediate local state update + Server Firestore persistence)
+  const handleAddProject = async (newProject: ProjectItem) => {
     setProjects((prev) => [newProject, ...prev]);
-    setSelectedProject(newProject); // automatically open detail view for the newly created project
+    setSelectedProject(newProject);
+    setIsAddProjectOpen(false);
+
+    try {
+      await apiAddProject(newProject);
+    } catch (e) {
+      console.error('Failed to sync new project with server:', e);
+    }
   };
 
-  const handleDeleteProject = (projectId: string) => {
+  const handleUpdateProject = async (updatedProject: ProjectItem) => {
+    setProjects((prev) => prev.map((p) => (p.id === updatedProject.id ? updatedProject : p)));
+    if (selectedProject?.id === updatedProject.id) {
+      setSelectedProject(updatedProject);
+    }
+    setIsEditProjectOpen(false);
+    setEditingProject(null);
+
+    try {
+      await apiUpdateProject(updatedProject);
+    } catch (e) {
+      console.error('Failed to sync updated project with server:', e);
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== projectId));
     if (selectedProject?.id === projectId) {
       setSelectedProject(null);
+    }
+    if (editingProject?.id === projectId) {
+      setIsEditProjectOpen(false);
+      setEditingProject(null);
+    }
+
+    try {
+      await apiDeleteProject(projectId);
+    } catch (e) {
+      console.error('Failed to delete project from server:', e);
     }
   };
 
   const handleLoginSuccess = (user: AdminUser) => {
     setCurrentUser(user);
-    setActiveSession(user);
+    setIsAdminAuthOpen(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await apiLogout();
     setCurrentUser(null);
-    setActiveSession(null);
+  };
+
+  const handleOpenEdit = (project: ProjectItem) => {
+    setEditingProject(project);
+    setIsEditProjectOpen(true);
   };
 
   const isAdmin = !!currentUser;
 
+  // ROUTE: /admin (Dedicated Admin Portal)
+  if (currentPath === '/admin') {
+    return (
+      <>
+        <AdminPortalPage
+          currentUser={currentUser}
+          projects={projects}
+          onNavigateHome={() => navigateTo('/')}
+          onLoginSuccess={handleLoginSuccess}
+          onLogout={handleLogout}
+          onOpenAddProject={() => setIsAddProjectOpen(true)}
+          onOpenEditProject={handleOpenEdit}
+          onDeleteProject={handleDeleteProject}
+          onSelectProjectPreview={(proj) => setSelectedProject(proj)}
+        />
+
+        {/* Modals needed inside Admin Portal */}
+        <AddProjectModal
+          isOpen={isAddProjectOpen}
+          onClose={() => setIsAddProjectOpen(false)}
+          onAddProject={handleAddProject}
+          nextProjectNumber={projects.length + 1}
+        />
+
+        <EditProjectModal
+          isOpen={isEditProjectOpen}
+          project={editingProject}
+          onClose={() => {
+            setIsEditProjectOpen(false);
+            setEditingProject(null);
+          }}
+          onUpdateProject={handleUpdateProject}
+        />
+
+        <ProjectDetailModal
+          project={selectedProject}
+          onClose={() => setSelectedProject(null)}
+        />
+      </>
+    );
+  }
+
+  // ROUTE: / (Public Portfolio - viewable by everyone without login)
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 relative overflow-x-hidden selection:bg-cyan-500 selection:text-black">
       {/* Background Cybernetic Matrix Grid */}
@@ -103,18 +240,15 @@ export default function App() {
       {/* Main Content Layer */}
       <div className="relative z-10 flex flex-col min-h-screen">
         
-        {/* Navigation Bar with Admin Status */}
+        {/* Navigation Bar */}
         <Navbar 
-          currentUser={currentUser}
           onOpenConnect={() => setIsConnectOpen(true)}
           onOpenTerminal={() => setIsTerminalOpen(true)}
-          onOpenAdminLogin={() => setIsAdminAuthOpen(true)}
-          onOpenAdminManagement={() => setIsAdminManagementOpen(true)}
-          onLogout={handleLogout}
         />
 
-        {/* Hero Section */}
+        {/* Main Content */}
         <main className="flex-1">
+          {/* Hero Section */}
           <HeroSection />
 
           {/* Section Divider */}
@@ -132,14 +266,10 @@ export default function App() {
           {/* Section Divider */}
           <CyberDivider />
 
-          {/* Project Showcase Section */}
+          {/* Project Showcase Section (Public View) */}
           <ProjectsSection 
             projects={projects}
-            isAdmin={isAdmin}
             onSelectProject={(project) => setSelectedProject(project)}
-            onOpenAddProject={() => setIsAddProjectOpen(true)}
-            onRequireAdmin={() => setIsAdminAuthOpen(true)}
-            onDeleteProject={handleDeleteProject}
           />
 
           {/* Section Divider */}
@@ -166,12 +296,22 @@ export default function App() {
         nextProjectNumber={projects.length + 1}
       />
 
+      <EditProjectModal
+        isOpen={isEditProjectOpen}
+        project={editingProject}
+        onClose={() => {
+          setIsEditProjectOpen(false);
+          setEditingProject(null);
+        }}
+        onUpdateProject={handleUpdateProject}
+      />
+
       <InteractiveTerminalModal 
         isOpen={isTerminalOpen} 
         onClose={() => setIsTerminalOpen(false)} 
         projects={projects}
         currentUser={currentUser}
-        onOpenAdminLogin={() => setIsAdminAuthOpen(true)}
+        onOpenAdminLogin={() => navigateTo('/admin')}
       />
 
       <ConnectModal 
@@ -179,14 +319,12 @@ export default function App() {
         onClose={() => setIsConnectOpen(false)} 
       />
 
-      {/* Admin Authentication Modal */}
       <AdminAuthModal
         isOpen={isAdminAuthOpen}
         onClose={() => setIsAdminAuthOpen(false)}
         onLoginSuccess={handleLoginSuccess}
       />
 
-      {/* Admin Privilege & User Management Modal */}
       <AdminManagementModal
         isOpen={isAdminManagementOpen}
         onClose={() => setIsAdminManagementOpen(false)}

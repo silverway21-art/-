@@ -1,0 +1,58 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "Robotics and engineering project item shown in portfolio",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "descriptionKo": { "type": "string" },
+        "descriptionEn": { "type": "string" },
+        "image": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ACTIVE", "IN_DEVELOPMENT", "ARCHIVED"]
+        },
+        "featured": { "type": "boolean" },
+        "algorithmSteps": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "category", "descriptionKo"]
+    },
+    "AdminAccount": {
+      "title": "AdminAccount",
+      "description": "Secure admin account record with hashed password and salt for server-side verification",
+      "type": "object",
+      "properties": {
+        "adminId": { "type": "string" },
+        "username": { "type": "string" },
+        "passwordHash": { "type": "string" },
+        "salt": { "type": "string" },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "MENTOR", "COLLABORATOR"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["adminId", "username", "passwordHash", "salt", "role"]
+    }
+  },
+  "firestore": {
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Public portfolio robot project documents"
+    },
+    "/system_admins/{adminId}": {
+      "schema": "AdminAccount",
+      "description": "Private admin credentials store accessible ONLY by server-side authentication"
+    }
+  }
+}

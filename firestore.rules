@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Projects Collection: Public read, writes restricted to server or authenticated admin
+    match /projects/{projectId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.role == 'admin';
+    }
+
+    // System Admins Collection: Strict zero-trust isolation
+    // Client SDK can NEVER read or write admin hashes or accounts.
+    match /system_admins/{adminId} {
+      allow read, write: if false;
+    }
+
+    // Connection testing doc
+    match /test/connection {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

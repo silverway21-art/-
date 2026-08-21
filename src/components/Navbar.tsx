@@ -1,24 +1,15 @@
 import React, { useState } from 'react';
-import { Menu, X, Mail, Terminal, Bot, Shield, ShieldCheck, LogOut, Users, Key } from 'lucide-react';
+import { Menu, X, Mail, Terminal } from 'lucide-react';
 import zionLogoImg from '../assets/images/zion_robot_logo_1786709549858.jpg';
-import { AdminUser } from '../types';
 
 interface NavbarProps {
-  currentUser: AdminUser | null;
   onOpenConnect: () => void;
   onOpenTerminal: () => void;
-  onOpenAdminLogin: () => void;
-  onOpenAdminManagement: () => void;
-  onLogout: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  currentUser,
   onOpenConnect,
   onOpenTerminal,
-  onOpenAdminLogin,
-  onOpenAdminManagement,
-  onLogout,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -38,8 +29,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       element.scrollIntoView({ behavior: 'smooth' });
     }
   };
-
-  const isAdmin = !!currentUser;
 
   return (
     <header className="sticky top-0 z-40 w-full bg-[#030712]/90 backdrop-blur-md border-b border-cyan-950/80">
@@ -91,48 +80,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           ))}
         </nav>
 
-        {/* Right: Actions (Admin Controls, Terminal, Connect) */}
+        {/* Right: Actions (Terminal, Connect) */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          
-          {/* Admin Status & Controls */}
-          {isAdmin ? (
-            <div className="flex items-center gap-1.5 bg-[#041426] border border-cyan-500/70 px-2 py-1 rounded-lg shadow-[0_0_12px_rgba(6,182,212,0.25)]">
-              <button
-                id="admin-management-btn"
-                onClick={onOpenAdminManagement}
-                className="flex items-center gap-1.5 text-xs font-mono-tech text-cyan-300 hover:text-white transition-colors"
-                title="관리자 권한 관리 및 다른 사람에게 권한 부여"
-              >
-                <ShieldCheck size={14} className="text-emerald-400 animate-pulse" />
-                <span className="hidden lg:inline text-[11px] font-bold text-white">
-                  {currentUser.name}
-                </span>
-                <span className="text-[9px] font-mono-tech px-1.5 py-0.2 bg-cyan-900 text-cyan-300 rounded border border-cyan-700">
-                  {currentUser.role}
-                </span>
-                <Users size={12} className="text-cyan-400 ml-0.5 hover:scale-110" />
-              </button>
-
-              <button
-                onClick={onLogout}
-                className="p-1 text-slate-400 hover:text-rose-400 transition-colors ml-1 border-l border-cyan-900 pl-1.5"
-                title="관리자 로그아웃"
-              >
-                <LogOut size={13} />
-              </button>
-            </div>
-          ) : (
-            <button
-              id="admin-login-btn"
-              onClick={onOpenAdminLogin}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-800/60 text-cyan-400 hover:text-white rounded-lg text-xs font-mono-tech transition-all"
-              title="관리자 로그인 (프로젝트 추가/수정 권한)"
-            >
-              <Key size={13} />
-              <span className="hidden sm:inline text-[11px]">Admin</span>
-            </button>
-          )}
-
           {/* Terminal button */}
           <button
             id="terminal-open-btn"
@@ -171,49 +120,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             ))}
           </div>
 
-          {/* Mobile Admin Section */}
-          <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-800 flex items-center justify-between">
-            {isAdmin ? (
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck size={16} className="text-emerald-400" />
-                  <span className="text-xs text-white font-bold">{currentUser.name} ({currentUser.role})</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      onOpenAdminManagement();
-                    }}
-                    className="px-2 py-1 bg-cyan-500 text-black text-[11px] font-bold rounded"
-                  >
-                    권한 관리
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      onLogout();
-                    }}
-                    className="p-1 text-rose-400"
-                  >
-                    <LogOut size={15} />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenAdminLogin();
-                }}
-                className="w-full flex items-center justify-center gap-2 py-1.5 text-xs font-mono-tech text-cyan-300 bg-cyan-900/50 rounded border border-cyan-700"
-              >
-                <Key size={14} />
-                <span>관리자 로그인 (Owner & Admin Access)</span>
-              </button>
-            )}
-          </div>
-
           <div className="pt-2 border-t border-cyan-950 flex gap-2">
             <button
               onClick={() => {
@@ -231,7 +137,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
               className="flex-1 flex items-center justify-center gap-2 py-2 text-xs font-mono-tech text-black bg-cyan-400 font-bold rounded shadow-[0_0_10px_rgba(34,211,238,0.4)]"
             >
-              <Bot size={14} /> Send Message
+              <Mail size={14} /> Connect
             </button>
           </div>
         </div>
