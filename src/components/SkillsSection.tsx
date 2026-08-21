@@ -10,14 +10,19 @@ import {
   Terminal,
   Hammer
 } from 'lucide-react';
-import { SKILL_ITEMS } from '../data/portfolioData';
+import { SKILL_ITEMS as DEFAULT_SKILL_ITEMS } from '../data/portfolioData';
 import { SkillItem } from '../types';
 
-export const SkillsSection: React.FC = () => {
+interface SkillsSectionProps {
+  skillItems?: SkillItem[];
+}
+
+export const SkillsSection: React.FC<SkillsSectionProps> = ({ skillItems }) => {
+  const allSkills = skillItems && skillItems.length > 0 ? skillItems : DEFAULT_SKILL_ITEMS;
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
   const [selectedSkill, setSelectedSkill] = useState<SkillItem | null>(null);
 
-  const filterChips = ['ALL', 'ROS2', 'Linux', 'CAD', 'Embedded', 'Control'];
+  const filterChips = ['ALL', 'Code', 'Control', 'Logic'];
 
   const getSkillIcon = (iconType: SkillItem['iconType']) => {
     switch (iconType) {
@@ -43,15 +48,14 @@ export const SkillsSection: React.FC = () => {
     }
   };
 
-  const filteredSkills = SKILL_ITEMS.filter((skill) => {
+  const filteredSkills = allSkills.filter((skill) => {
     if (activeFilter === 'ALL') return true;
-    if (activeFilter === 'ROS2') return skill.tags.some(t => t.includes('ROS') || t.includes('RCLPY'));
-    if (activeFilter === 'Linux') return skill.id === 'skill-ros2' || skill.tags.some(t => t.includes('Linux') || t.includes('ROS'));
-    if (activeFilter === 'CAD') return skill.id === 'skill-mechatronics' || skill.tags.some(t => t.includes('CAD') || t.includes('3D'));
-    if (activeFilter === 'Embedded') return skill.category === 'code' || skill.tags.some(t => t.includes('Embedded') || t.includes('ADC'));
-    if (activeFilter === 'Control') return skill.category === 'control' || skill.tags.some(t => t.includes('Control') || t.includes('PID'));
+    if (activeFilter === 'Code') return skill.category === 'code';
+    if (activeFilter === 'Control') return skill.category === 'control';
+    if (activeFilter === 'Logic') return skill.category === 'logic';
     return true;
   });
+
 
   return (
     <section id="skills" className="max-w-4xl mx-auto px-4 py-4">

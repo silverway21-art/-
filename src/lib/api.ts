@@ -1,4 +1,4 @@
-import { ProjectItem, AdminUser } from '../types';
+import { ProjectItem, AdminUser, SiteConfig } from '../types';
 import { db } from './firebase';
 import { 
   collection, 
@@ -9,10 +9,12 @@ import {
   getDocs, 
   deleteDoc 
 } from 'firebase/firestore';
-import { PROJECT_ITEMS } from '../data/portfolioData';
+import { PROJECT_ITEMS, DEFAULT_SITE_CONFIG } from '../data/portfolioData';
 
 const TOKEN_KEY = 'zion_admin_token_v2';
 const USER_KEY = 'zion_admin_user_v2';
+const SITE_CONFIG_KEY = 'zion_portfolio_site_config_v2';
+
 
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
@@ -41,36 +43,18 @@ export function clearSession() {
 }
 
 /**
- * Universal Master Admin validation helper
+ * Universal Master Admin credential check
  */
 function isMasterCredential(username: string, password: string): boolean {
   const user = (username || '').trim().toLowerCase();
-  const pass = (password || '').trim().toLowerCase();
+  const pass = (password || '').trim();
   
-  const validUsers = [
-    'zionadminid',
-    'zionadmin',
-    'admin',
-    'zion',
-    'zionkim',
-    'superadmin',
-    'silverway21@gmail.com'
-  ];
-  
-  const validPasses = [
-    'zionadminpw',
-    'zionadmin',
-    'zionadminpw!',
-    'zion1234',
-    'admin1234',
-    'admin'
-  ];
-
-  return validUsers.includes(user) && (validPasses.includes(pass) || password.trim() === 'zionadminPW');
+  const isMasterUser = user === 'zionadminid' || user === 'silverway21@gmail.com';
+  return isMasterUser && pass === 'zionadminPW';
 }
 
 /**
- * Universal Admin Authentication (Supports Express API & Vercel / GitHub Static Fallback)
+ * Universal Admin Authentication (Supports Express API & Secure Fallback)
  */
 export async function apiLogin(
   username: string, 
@@ -84,7 +68,7 @@ export async function apiLogin(
     return { success: false, message: '아이디와 비밀번호를 모두 입력해 주세요.' };
   }
 
-  // 1. Try Express API Endpoint first (if custom server is alive)
+  // 1. Try Express API Endpoint first
   try {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
@@ -93,9 +77,9 @@ export async function apiLogin(
     });
 
     const contentType = response.headers.get('content-type') || '';
-    if (response.ok && contentType.includes('application/json')) {
+    if (contentType.includes('application/json')) {
       const data = await response.json();
-      if (data.success && data.user) {
+      if (response.ok && data.success && data.user) {
         const adminUser: AdminUser = {
           id: data.user.username || cleanUser,
           email: data.user.email || `${cleanUser}@portfolio.local`,
@@ -106,38 +90,42 @@ export async function apiLogin(
         };
         saveSession(data.token, adminUser, remember);
         return { success: true, user: adminUser, token: data.token };
+      } else {
+        return { 
+          success: false, 
+          message: data.message || '아이디 또는 비밀번호가 올바르지 않습니다.' 
+        };
       }
     }
   } catch (err) {
-    console.warn('[Auth] Express API route unavailable (e.g. Vercel static hosting). Activating direct Firestore auth...', err);
+    console.warn('[Auth] Express API route unavailable. Proceeding with client auth check...', err);
   }
 
-  // 2. Direct Fallback: Check Firestore / Master Credentials for Vercel & GitHub Deployments
+  // 2. Strict Fallback for Static Deployments / Network Failures
   try {
     let isAuthenticated = false;
     let adminName = '김지온 (Zion Kim)';
     let adminEmail = 'silverway21@gmail.com';
 
-    // A. Check Firestore /system_admins collection directly
-    try {
-      const adminDocRef = doc(db, 'system_admins', cleanUser);
-      const snap = await getDoc(adminDocRef);
-      if (snap.exists()) {
-        const data = snap.data();
-        adminName = data.name || adminName;
-        adminEmail = data.email || adminEmail;
-        // Check if master or simple verification
-        if (data.username === cleanUser || isMasterCredential(cleanUser, cleanPass)) {
-          isAuthenticated = true;
-        }
-      }
-    } catch (fsErr) {
-      console.warn('[Auth] Firestore direct lookup notice:', fsErr);
-    }
-
-    // B. Master admin check (zionadminID / zionadminPW)
-    if (!isAuthenticated && isMasterCredential(cleanUser, cleanPass)) {
+    // Master account check (zionadminID / zionadminPW)
+    if (isMasterCredential(cleanUser, cleanPass)) {
       isAuthenticated = true;
+    } else {
+      // Check Firestore /system_admins collection directly
+      try {
+        const adminDocRef = doc(db, 'system_admins', cleanUser);
+        const snap = await getDoc(adminDocRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.passcode && data.passcode === cleanPass) {
+            isAuthenticated = true;
+            adminName = data.name || adminName;
+            adminEmail = data.email || adminEmail;
+          }
+        }
+      } catch (fsErr) {
+        console.warn('[Auth] Firestore direct lookup notice:', fsErr);
+      }
     }
 
     if (isAuthenticated) {
@@ -161,7 +149,7 @@ export async function apiLogin(
 
     return {
       success: false,
-      message: '아이디 또는 비밀번호가 일치하지 않습니다.',
+      message: '아이디 또는 비밀번호가 올바르지 않습니다.',
     };
   } catch (fatalErr: any) {
     console.error('Fatal login error:', fatalErr);
@@ -183,25 +171,28 @@ export async function apiCheckSession(): Promise<{ authenticated: boolean; user?
     return { authenticated: false };
   }
 
-  // If token is a client-fallback token or standard session, verify stored session
-  if (token.startsWith('vcl_') || storedUser) {
-    return { authenticated: true, user: storedUser };
-  }
+  // If token is a server session token, verify with server
+  if (!token.startsWith('vcl_')) {
+    try {
+      const response = await fetch('/api/auth/session', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-  try {
-    const response = await fetch('/api/auth/session', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    const contentType = response.headers.get('content-type') || '';
-    if (response.ok && contentType.includes('application/json')) {
-      const data = await response.json();
-      if (data.authenticated && data.user) {
-        return { authenticated: true, user: data.user };
+      if (response.status === 401 || response.status === 403) {
+        clearSession();
+        return { authenticated: false };
       }
+
+      const contentType = response.headers.get('content-type') || '';
+      if (response.ok && contentType.includes('application/json')) {
+        const data = await response.json();
+        if (data.authenticated && data.user) {
+          return { authenticated: true, user: data.user };
+        }
+      }
+    } catch {
+      // Network fallback
     }
-  } catch {
-    // Network fallback
   }
 
   return { authenticated: !!storedUser, user: storedUser || undefined };
@@ -377,3 +368,130 @@ export function subscribeToProjects(onUpdate: (projects: ProjectItem[]) => void)
     return () => {};
   }
 }
+
+/**
+ * Fetch entire site configuration (Hero, Journey, Skills, Awards, Footer)
+ */
+export async function apiGetSiteConfig(): Promise<SiteConfig> {
+  // Check local storage cache first for instant boot
+  try {
+    const cached = localStorage.getItem(SITE_CONFIG_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && parsed.portfolioInfo) {
+        // Return cached while background fetch proceeds
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // 1. Try Express API
+  try {
+    const res = await fetch('/api/site-config');
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      const data = await res.json();
+      if (data.success && data.siteConfig) {
+        localStorage.setItem(SITE_CONFIG_KEY, JSON.stringify(data.siteConfig));
+        return data.siteConfig;
+      }
+    }
+  } catch {
+    // Continue to Firestore Direct
+  }
+
+  // 2. Direct Firestore lookup
+  try {
+    const docRef = doc(db, 'site_config', 'main');
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const config = snap.data() as SiteConfig;
+      localStorage.setItem(SITE_CONFIG_KEY, JSON.stringify(config));
+      return config;
+    }
+  } catch (fsErr) {
+    console.warn('[SiteConfig] Firestore getDoc notice:', fsErr);
+  }
+
+  return DEFAULT_SITE_CONFIG;
+}
+
+/**
+ * Admin: Update site configuration (Entire text & interface)
+ */
+export async function apiUpdateSiteConfig(
+  newConfig: Partial<SiteConfig>
+): Promise<{ success: boolean; siteConfig?: SiteConfig; message?: string }> {
+  const token = getStoredToken();
+  const currentConfig = await apiGetSiteConfig();
+  const merged: SiteConfig = {
+    ...currentConfig,
+    ...newConfig,
+    portfolioInfo: {
+      ...currentConfig.portfolioInfo,
+      ...(newConfig.portfolioInfo || {})
+    },
+    journeyItems: newConfig.journeyItems || currentConfig.journeyItems,
+    skillItems: newConfig.skillItems || currentConfig.skillItems,
+    awardsData: newConfig.awardsData || currentConfig.awardsData
+  };
+
+  // Cache locally immediately
+  try {
+    localStorage.setItem(SITE_CONFIG_KEY, JSON.stringify(merged));
+  } catch (e) {
+    console.warn('LocalStorage save failed:', e);
+  }
+
+  // 1. Try Express API
+  try {
+    const res = await fetch('/api/admin/site-config', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(merged),
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      const data = await res.json();
+      if (data.success) return { success: true, siteConfig: data.siteConfig || merged };
+    }
+  } catch {
+    // Continue to Firestore Direct
+  }
+
+  // 2. Direct Firestore update
+  try {
+    await setDoc(doc(db, 'site_config', 'main'), merged, { merge: true });
+    return { success: true, siteConfig: merged };
+  } catch (e: any) {
+    console.error('Direct Firestore site config update failed:', e);
+    return { success: false, message: e.message || '사이트 설정 저장 실패' };
+  }
+}
+
+/**
+ * Real-time subscription to site configuration changes
+ */
+export function subscribeToSiteConfig(onUpdate: (config: SiteConfig) => void) {
+  try {
+    const docRef = doc(db, 'site_config', 'main');
+    const unsubscribe = onSnapshot(docRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const config = snapshot.data() as SiteConfig;
+        localStorage.setItem(SITE_CONFIG_KEY, JSON.stringify(config));
+        onUpdate(config);
+      }
+    }, (err) => {
+      console.warn('[Firestore] Site config realtime subscription notice:', err.message);
+    });
+    return unsubscribe;
+  } catch (e) {
+    console.warn('[Firestore] Could not attach site config listener:', e);
+    return () => {};
+  }
+}
+

@@ -10,8 +10,11 @@ import {
   destroySession,
   getProjectsFromDb,
   saveProjectToDb,
-  deleteProjectFromDb
+  deleteProjectFromDb,
+  getSiteConfigFromDb,
+  saveSiteConfigToDb
 } from './src/server/firestoreService';
+
 
 dotenv.config();
 
@@ -92,6 +95,17 @@ app.get('/api/projects', async (req, res) => {
   }
 });
 
+// Public Site Config Retrieval (Backed by Firestore)
+app.get('/api/site-config', async (req, res) => {
+  try {
+    const siteConfig = await getSiteConfigFromDb();
+    return res.json({ success: true, siteConfig });
+  } catch (err: any) {
+    console.error('Fetch site-config error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Middleware to guard Admin Project Mutation APIs
 const requireAdminAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers.authorization;
@@ -102,6 +116,22 @@ const requireAdminAuth = (req: express.Request, res: express.Response, next: exp
   (req as any).adminUser = session;
   next();
 };
+
+// Admin: Update Site Config
+app.put('/api/admin/site-config', requireAdminAuth, async (req, res) => {
+  try {
+    const configData = req.body;
+    if (!configData) {
+      return res.status(400).json({ success: false, message: '설정 데이터가 누락되었습니다.' });
+    }
+    await saveSiteConfigToDb(configData);
+    return res.json({ success: true, siteConfig: configData });
+  } catch (err: any) {
+    console.error('Update site config error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // Admin: Create Project
 app.post('/api/admin/projects', requireAdminAuth, async (req, res) => {

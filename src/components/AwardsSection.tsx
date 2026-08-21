@@ -1,9 +1,17 @@
 import React, { useState } from 'react';
 import { Trophy, Target, Sparkles, CheckCircle2 } from 'lucide-react';
-import { AWARDS_DATA } from '../data/portfolioData';
+import { AWARDS_DATA as DEFAULT_AWARDS, PORTFOLIO_INFO as DEFAULT_INFO } from '../data/portfolioData';
+import { AwardItem, PortfolioInfo } from '../types';
 
-export const AwardsSection: React.FC = () => {
+interface AwardsSectionProps {
+  awardsData?: AwardItem[];
+  portfolioInfo?: PortfolioInfo;
+}
+
+export const AwardsSection: React.FC<AwardsSectionProps> = ({ awardsData, portfolioInfo }) => {
   const [showGoalPlanner, setShowGoalPlanner] = useState(false);
+  const awards = awardsData && awardsData.length > 0 ? awardsData : DEFAULT_AWARDS;
+  const info = portfolioInfo || (DEFAULT_INFO as PortfolioInfo);
 
   return (
     <section id="awards" className="max-w-4xl mx-auto px-4 py-4">
@@ -25,7 +33,7 @@ export const AwardsSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Dashed Cyber Scanner Box matching Image 1 & Image 3 */}
+      {/* Dashed Cyber Scanner Box */}
       <div className="relative rounded-2xl border-2 border-dashed border-cyan-900/70 hover:border-cyan-500/60 bg-[#050b16]/70 p-8 sm:p-12 flex flex-col items-center justify-center text-center transition-all duration-300 shadow-[0_0_20px_rgba(6,182,212,0.05)]">
         
         {/* Subtle Cyber Radar Wave */}
@@ -36,16 +44,16 @@ export const AwardsSection: React.FC = () => {
           <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-cyan-400 animate-ping" />
         </div>
 
-        {/* Text exactly matching screenshots */}
+        {/* Text */}
         <h3 className="font-mono-tech text-sm sm:text-base font-bold text-slate-200 tracking-widest uppercase mb-1">
-          NO AWARDS YET
+          {info.noAwardsTitle || 'NO AWARDS YET'}
         </h3>
         <p className="font-mono-tech text-xs sm:text-sm text-cyan-500/80 tracking-wide mb-4">
-          Database scanning... 0 records found.
+          {info.noAwardsDesc || 'Database scanning... 0 records found.'}
         </p>
 
         <p className="text-xs text-slate-400 max-w-md font-mono-tech mb-6 leading-relaxed">
-          &quot;최대한 열심히 경기에 임했고 조별 경기 3연승의 성과를 거두었습니다. 현재 다음 시즌 트로피 획득을 위해 알고리즘 고도화 훈련 중입니다.&quot;
+          &quot;{info.noAwardsQuote || info.quote || '최대한 열심히 경기에 임했고 조별 경기 3연승의 성과를 거두었습니다. 현재 다음 시즌 트로피 획득을 위해 알고리즘 고도화 훈련 중입니다.'}&quot;
         </p>
 
         {/* Target Goal Roadmap Toggle */}
@@ -64,14 +72,14 @@ export const AwardsSection: React.FC = () => {
               <Sparkles size={14} />
               <span>UPCOMING TOURNAMENT TARGETS</span>
             </div>
-            {AWARDS_DATA.map((target) => (
+            {awards.map((target) => (
               <div key={target.id} className="p-3 rounded-lg bg-cyan-950/30 border border-cyan-950 flex items-start justify-between gap-3 text-xs">
                 <div>
                   <div className="font-bold text-white mb-0.5">{target.title}</div>
                   <div className="text-[11px] font-mono-tech text-slate-400">{target.organization} • {target.category}</div>
                 </div>
                 <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 text-[10px] font-mono-tech flex-shrink-0 flex items-center gap-1">
-                  <CheckCircle2 size={10} /> TARGET
+                  <CheckCircle2 size={10} /> {target.status || 'TARGET'}
                 </span>
               </div>
             ))}
@@ -81,3 +89,4 @@ export const AwardsSection: React.FC = () => {
     </section>
   );
 };
+

@@ -56,6 +56,33 @@ export interface AwardItem {
   status: 'PENDING' | 'AWARDED' | 'TARGET_GOAL';
 }
 
+export interface PortfolioInfo {
+  name: string;
+  handle: string;
+  title: string;
+  headlineKorean: string;
+  subheadline: string;
+  primaryDirective: string;
+  goal: string;
+  quote?: string;
+  year: number;
+  sysInitBadge?: string;
+  coreArch?: string;
+  focusArea?: string;
+  footerText?: string;
+  privacyPolicy?: string;
+  noAwardsTitle?: string;
+  noAwardsDesc?: string;
+  noAwardsQuote?: string;
+}
+
+export interface SiteConfig {
+  portfolioInfo: PortfolioInfo;
+  journeyItems: JourneyItem[];
+  skillItems: SkillItem[];
+  awardsData: AwardItem[];
+}
+
 export type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'MENTOR' | 'COLLABORATOR';
 
 export interface AdminUser {
@@ -72,3 +99,4 @@ export interface AuthSession {
   isAuthenticated: boolean;
   currentUser: AdminUser | null;
 }
+

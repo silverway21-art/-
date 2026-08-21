@@ -20,8 +20,8 @@ import { ConnectModal } from './components/ConnectModal';
 import { AdminAuthModal } from './components/AdminAuthModal';
 import { AdminManagementModal } from './components/AdminManagementModal';
 import { AdminPortalPage } from './components/AdminPortalPage';
-import { PROJECT_ITEMS } from './data/portfolioData';
-import { ProjectItem, AdminUser } from './types';
+import { PROJECT_ITEMS, DEFAULT_SITE_CONFIG } from './data/portfolioData';
+import { ProjectItem, AdminUser, SiteConfig } from './types';
 import { 
   apiCheckSession, 
   apiLogout, 
@@ -30,11 +30,15 @@ import {
   apiUpdateProject, 
   apiDeleteProject, 
   subscribeToProjects,
+  apiGetSiteConfig,
+  apiUpdateSiteConfig,
+  subscribeToSiteConfig,
   getStoredUser
 } from './lib/api';
 import { testFirebaseConnection } from './lib/firebase';
 
-const STORAGE_KEY = 'zion_portfolio_projects_v2';
+const STORAGE_KEY = 'zion_portfolio_projects_v3';
+const SITE_CONFIG_STORAGE_KEY = 'zion_portfolio_site_config_v2';
 
 export default function App() {
   // Routing state
@@ -54,6 +58,22 @@ export default function App() {
       console.warn('Failed to load local projects cache', e);
     }
     return PROJECT_ITEMS;
+  });
+
+  // Full Site Configuration State (Hero, Directives, Journey, Skills, Awards, Footer)
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => {
+    try {
+      const saved = localStorage.getItem(SITE_CONFIG_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.portfolioInfo) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load local site config cache', e);
+    }
+    return DEFAULT_SITE_CONFIG;
   });
 
   // Admin authentication state (Persistent & Server Verified)
@@ -84,7 +104,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  // Boot: Test connection, verify admin session, and load projects from Database
+  // Boot: Test connection, verify admin session, and load projects & site config from Database
   useEffect(() => {
     testFirebaseConnection();
 
@@ -102,15 +122,30 @@ export default function App() {
       }
     });
 
-    // Subscribe to real-time updates from Firestore
-    const unsubscribe = subscribeToProjects((liveProjects) => {
+    // Load initial site config from server/Firestore
+    apiGetSiteConfig().then((cfg) => {
+      if (cfg && cfg.portfolioInfo) {
+        setSiteConfig(cfg);
+      }
+    });
+
+    // Subscribe to real-time project updates from Firestore
+    const unsubscribeProjects = subscribeToProjects((liveProjects) => {
       if (liveProjects && liveProjects.length > 0) {
         setProjects(liveProjects);
       }
     });
 
+    // Subscribe to real-time site config updates from Firestore
+    const unsubscribeConfig = subscribeToSiteConfig((liveConfig) => {
+      if (liveConfig && liveConfig.portfolioInfo) {
+        setSiteConfig(liveConfig);
+      }
+    });
+
     return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
+      if (typeof unsubscribeProjects === 'function') unsubscribeProjects();
+      if (typeof unsubscribeConfig === 'function') unsubscribeConfig();
     };
   }, []);
 
@@ -122,6 +157,15 @@ export default function App() {
       console.warn('Failed to cache projects', e);
     }
   }, [projects]);
+
+  // Save site config to local cache
+  useEffect(() => {
+    try {
+      localStorage.setItem(SITE_CONFIG_STORAGE_KEY, JSON.stringify(siteConfig));
+    } catch (e) {
+      console.warn('Failed to cache site config', e);
+    }
+  }, [siteConfig]);
 
   // Project CRUD Operations (Immediate local state update + Server Firestore persistence)
   const handleAddProject = async (newProject: ProjectItem) => {
@@ -168,6 +212,22 @@ export default function App() {
     }
   };
 
+  // Site Configuration Update Handler
+  const handleSaveSiteConfig = async (newConfig: Partial<SiteConfig>): Promise<boolean> => {
+    setSiteConfig((prev) => ({
+      ...prev,
+      ...newConfig
+    }));
+
+    try {
+      const res = await apiUpdateSiteConfig(newConfig);
+      return res.success;
+    } catch (e) {
+      console.error('Failed to update site config:', e);
+      return false;
+    }
+  };
+
   const handleLoginSuccess = (user: AdminUser) => {
     setCurrentUser(user);
     setIsAdminAuthOpen(false);
@@ -183,8 +243,6 @@ export default function App() {
     setIsEditProjectOpen(true);
   };
 
-  const isAdmin = !!currentUser;
-
   // ROUTE: /admin (Dedicated Admin Portal)
   if (currentPath === '/admin') {
     return (
@@ -192,6 +250,7 @@ export default function App() {
         <AdminPortalPage
           currentUser={currentUser}
           projects={projects}
+          siteConfig={siteConfig}
           onNavigateHome={() => navigateTo('/')}
           onLoginSuccess={handleLoginSuccess}
           onLogout={handleLogout}
@@ -199,6 +258,7 @@ export default function App() {
           onOpenEditProject={handleOpenEdit}
           onDeleteProject={handleDeleteProject}
           onSelectProjectPreview={(proj) => setSelectedProject(proj)}
+          onSaveSiteConfig={handleSaveSiteConfig}
         />
 
         {/* Modals needed inside Admin Portal */}
@@ -248,25 +308,25 @@ export default function App() {
 
         {/* Main Content */}
         <main className="flex-1">
-          {/* Hero Section */}
-          <HeroSection />
+          {/* Hero Section (Controlled via Admin CMS) */}
+          <HeroSection portfolioInfo={siteConfig.portfolioInfo} />
 
           {/* Section Divider */}
           <CyberDivider />
 
-          {/* Competition Journey Section */}
-          <JourneySection />
+          {/* Competition Journey Section (Controlled via Admin CMS) */}
+          <JourneySection journeyItems={siteConfig.journeyItems} />
 
           {/* Section Divider */}
           <CyberDivider />
 
-          {/* Technical Arsenal & Core Skills Section */}
-          <SkillsSection />
+          {/* Technical Arsenal & Core Skills Section (Controlled via Admin CMS) */}
+          <SkillsSection skillItems={siteConfig.skillItems} />
 
           {/* Section Divider */}
           <CyberDivider />
 
-          {/* Project Showcase Section (Public View) */}
+          {/* Project Showcase Section (Public View with Custom Images) */}
           <ProjectsSection 
             projects={projects}
             onSelectProject={(project) => setSelectedProject(project)}
@@ -275,12 +335,18 @@ export default function App() {
           {/* Section Divider */}
           <CyberDivider />
 
-          {/* Certifications & Awards Section */}
-          <AwardsSection />
+          {/* Certifications & Awards Section (Controlled via Admin CMS) */}
+          <AwardsSection 
+            awardsData={siteConfig.awardsData} 
+            portfolioInfo={siteConfig.portfolioInfo}
+          />
         </main>
 
-        {/* Footer */}
-        <Footer onOpenTerminal={() => setIsTerminalOpen(true)} />
+        {/* Footer (Controlled via Admin CMS) */}
+        <Footer 
+          onOpenTerminal={() => setIsTerminalOpen(true)} 
+          portfolioInfo={siteConfig.portfolioInfo}
+        />
       </div>
 
       {/* Modals and Overlays */}

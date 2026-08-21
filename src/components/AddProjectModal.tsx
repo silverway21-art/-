@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { X, Plus, Trash2, Upload, Sparkles, Languages, Check, Bot, Loader2, ArrowRight, Wand2 } from 'lucide-react';
+import { X, Plus, Trash2, Upload, Sparkles, Languages, Check, Bot, Loader2, ArrowRight, Wand2, Image as ImageIcon, Link as LinkIcon, RotateCcw } from 'lucide-react';
 import { ProjectItem } from '../types';
 import zionLogoImg from '../assets/images/zion_robot_logo_1786709549858.jpg';
 import robotLineTracingImg from '../assets/images/robot_line_tracing_1786709526477.jpg';
 import { translateProjectDetails, translateSingleText } from '../utils/translation';
+
 
 interface AddProjectModalProps {
   isOpen: boolean;
@@ -517,20 +518,33 @@ void loop() {
           </div>
 
           {/* Image Selection & Upload */}
-          <div>
-            <label className="block text-xs font-mono-tech text-cyan-300 mb-1.5">
-              로봇 사진 / 이미지 등록 (Robot Visual Asset)
-            </label>
-            <div className="flex flex-col sm:flex-row items-center gap-4 p-3 rounded-xl bg-[#030814] border border-cyan-950">
-              <div className="w-24 h-20 rounded-lg overflow-hidden border border-cyan-500/60 bg-black flex-shrink-0 flex items-center justify-center">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-mono-tech text-cyan-300 flex items-center gap-1.5 font-bold">
+                <ImageIcon size={14} className="text-cyan-400" />
+                <span>로봇 프로젝트 사진 / 이미지 변경 (Project Image Asset) *</span>
+              </label>
+              <span className="text-[10px] text-cyan-400/80 font-mono-tech">
+                컴퓨터 파일 업로드 또는 웹 이미지 URL 입력
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start gap-4 p-4 rounded-xl bg-[#030814] border border-cyan-900/80">
+              {/* Preview Box */}
+              <div className="w-full sm:w-36 h-28 rounded-lg overflow-hidden border-2 border-cyan-500/60 bg-black flex-shrink-0 flex items-center justify-center relative shadow-[0_0_15px_rgba(6,182,212,0.2)]">
                 <img
-                  src={imagePreview}
-                  alt="Preview"
+                  src={imagePreview || zionLogoImg}
+                  alt="Robot Preview"
                   className="w-full h-full object-cover"
                 />
+                <span className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/80 rounded text-[9px] text-cyan-300 font-mono-tech">
+                  PREVIEW
+                </span>
               </div>
 
-              <div className="space-y-2 flex-1 w-full">
+              {/* Controls */}
+              <div className="space-y-3 flex-1 w-full">
+                {/* Upload & Preset Buttons */}
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     ref={fileInputRef}
@@ -542,34 +556,72 @@ void loop() {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 text-xs font-mono-tech"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs font-mono-tech shadow-[0_0_10px_rgba(6,182,212,0.3)] transition-all active:scale-95"
                   >
                     <Upload size={13} />
-                    <span>내 컴퓨터 사진 업로드</span>
+                    <span>내 컴퓨터 사진 변경 / 업로드</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setImagePreview(robotLineTracingImg)}
-                    className="px-2.5 py-1.5 rounded-lg bg-cyan-950/40 text-slate-300 hover:text-cyan-300 border border-cyan-900 text-xs font-mono-tech"
+                    className="px-2.5 py-1.5 rounded-lg bg-cyan-950/70 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 text-xs font-mono-tech transition-colors"
                   >
-                    라인트레이서 기본 사진
+                    라인트레이서 기본
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setImagePreview(zionLogoImg)}
-                    className="px-2.5 py-1.5 rounded-lg bg-cyan-950/40 text-slate-300 hover:text-cyan-300 border border-cyan-900 text-xs font-mono-tech"
+                    className="px-2.5 py-1.5 rounded-lg bg-cyan-950/70 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 text-xs font-mono-tech transition-colors"
                   >
                     사이버 로고
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setImagePreview('https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&auto=format&fit=crop&q=80')}
+                    className="px-2.5 py-1.5 rounded-lg bg-cyan-950/70 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 text-xs font-mono-tech transition-colors"
+                  >
+                    AI 휴머노이드
+                  </button>
                 </div>
-                <p className="text-[11px] text-slate-500 font-mono-tech">
-                  JPG, PNG 이미지를 직접 첨부하거나 기본 이미지를 선택할 수 있습니다.
+
+                {/* Direct Image URL input */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <LinkIcon size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-cyan-500" />
+                    <input
+                      type="url"
+                      placeholder="또는 이미지 웹 URL 직접 입력 (https://...)"
+                      value={imagePreview.startsWith('data:') ? '' : imagePreview}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setImagePreview(e.target.value);
+                        }
+                      }}
+                      className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-[#02050e] border border-cyan-900/80 focus:border-cyan-400 text-slate-200 text-xs font-mono-tech focus:outline-none"
+                    />
+                  </div>
+                  {imagePreview !== zionLogoImg && (
+                    <button
+                      type="button"
+                      onClick={() => setImagePreview(zionLogoImg)}
+                      className="p-1.5 rounded bg-cyan-950 text-slate-400 hover:text-white border border-cyan-900"
+                      title="기본 이미지로 초기화"
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[10px] text-slate-400 font-mono-tech">
+                  💡 컴퓨터의 사진(JPG, PNG, WebP)을 선택하여 등록하거나 웹 링크를 붙여넣을 수 있습니다.
                 </p>
               </div>
             </div>
           </div>
+
 
           {/* Tags */}
           <div>

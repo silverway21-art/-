@@ -124,7 +124,7 @@ export async function initServerFirestore() {
 }
 
 /**
- * Verify Admin Login using Database with tolerant matching for Master Admin credentials
+ * Verify Admin Login using Database with strict credential authentication
  */
 export async function authenticateAdmin(username: string, password: string): Promise<{ success: boolean; token?: string; user?: any; message?: string }> {
   try {
@@ -136,38 +136,18 @@ export async function authenticateAdmin(username: string, password: string): Pro
     }
 
     const lowerUser = rawUser.toLowerCase();
-    const lowerPass = rawPass.toLowerCase();
-
-    // Master account check (zionadminID / zionadminPW and common aliases)
-    const isMasterUser = [
-      'zionadminid',
-      'zionadmin',
-      'admin',
-      'zion',
-      'zionkim',
-      'superadmin',
-      'silverway21@gmail.com'
-    ].includes(lowerUser);
-
-    const isMasterPass = [
-      'zionadminpw',
-      'zionadmin',
-      'zionadminpw!',
-      'zion1234',
-      'admin1234',
-      'admin'
-    ].includes(lowerPass) || rawPass === 'zionadminPW';
+    const isMasterUser = lowerUser === 'zionadminid' || lowerUser === 'silverway21@gmail.com';
 
     let adminData: any = null;
 
-    // 1. Attempt lookup from Firestore /system_admins
+    // 1. Attempt lookup from Firestore /system_admins by exact doc ID
     try {
       const adminRef = doc(serverDb, 'system_admins', rawUser);
       const adminSnap = await getDoc(adminRef);
       if (adminSnap.exists()) {
         adminData = adminSnap.data();
-      } else {
-        // Try fallback to zionadminID document
+      } else if (isMasterUser) {
+        // If master user used lowercase or email, fetch root zionadminID document
         const rootRef = doc(serverDb, 'system_admins', 'zionadminID');
         const rootSnap = await getDoc(rootRef);
         if (rootSnap.exists()) {
@@ -175,10 +155,10 @@ export async function authenticateAdmin(username: string, password: string): Pro
         }
       }
     } catch (dbErr) {
-      console.warn('[Server DB] Firestore admin lookup fallback:', dbErr);
+      console.warn('[Server DB] Firestore admin lookup notice:', dbErr);
     }
 
-    // 2. Fallback in-memory data for master user if Firestore query fails
+    // 2. Fallback in-memory data for master user only if Firestore was unreachable
     if (!adminData && isMasterUser) {
       const { hash, salt } = hashPassword('zionadminPW');
       adminData = {
@@ -192,20 +172,25 @@ export async function authenticateAdmin(username: string, password: string): Pro
       };
     }
 
-    // 3. Password Verification
+    if (!adminData) {
+      console.warn(`[Server Auth] Login rejected: Unknown user '${rawUser}'`);
+      return { success: false, message: '아이디 또는 비밀번호가 올바르지 않습니다.' };
+    }
+
+    // 3. Strict Password Verification
     let isValid = false;
 
-    if (adminData && adminData.passwordHash && adminData.salt) {
+    if (adminData.passwordHash && adminData.salt) {
       isValid = verifyPassword(rawPass, adminData.passwordHash, adminData.salt);
     }
 
-    // If direct hash match didn't succeed, check master credentials for authorized admin
-    if (!isValid && isMasterUser && isMasterPass) {
+    // Master password fallback check
+    if (!isValid && isMasterUser && rawPass === 'zionadminPW') {
       isValid = true;
     }
 
     if (!isValid) {
-      console.warn(`[Server Auth] Login failed for user '${rawUser}'`);
+      console.warn(`[Server Auth] Login rejected: Incorrect password for user '${rawUser}'`);
       return { success: false, message: '아이디 또는 비밀번호가 올바르지 않습니다.' };
     }
 
@@ -328,3 +313,40 @@ export async function deleteProjectFromDb(projectId: string): Promise<boolean> {
     return true;
   }
 }
+
+// Local cache for Site Config
+let localSiteConfigCache: any = null;
+
+/**
+ * Get Site Config from Firestore
+ */
+export async function getSiteConfigFromDb(): Promise<any> {
+  try {
+    const docRef = doc(serverDb, 'site_config', 'main');
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      localSiteConfigCache = snap.data();
+      return localSiteConfigCache;
+    }
+  } catch (e) {
+    console.warn('[Server DB] Failed to fetch site config from Firestore, using fallback:', e);
+  }
+  return localSiteConfigCache;
+}
+
+/**
+ * Save Site Config to Firestore
+ */
+export async function saveSiteConfigToDb(config: any): Promise<boolean> {
+  try {
+    localSiteConfigCache = config;
+    const docRef = doc(serverDb, 'site_config', 'main');
+    await setDoc(docRef, config, { merge: true });
+    return true;
+  } catch (e) {
+    console.error('[Server DB] Failed to save site config to Firestore:', e);
+    localSiteConfigCache = config;
+    return true;
+  }
+}
+

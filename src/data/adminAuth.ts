@@ -1,20 +1,21 @@
 import { AdminUser, AuthSession } from '../types';
 
 export const ROOT_ADMIN_EMAIL = 'silverway21@gmail.com';
-export const MASTER_SECURITY_PIN = 'zion2026';
+export const ROOT_ADMIN_USERNAME = 'zionadminID';
+export const MASTER_SECURITY_PIN = 'zionadminPW';
 
 export const ROOT_ADMIN_USER: AdminUser = {
   id: 'admin-root-01',
   email: ROOT_ADMIN_EMAIL,
-  name: 'Zion Kim (김시온)',
+  name: '김지온 (Zion Kim)',
   role: 'SUPER_ADMIN',
   addedAt: '2026-08-14',
   passcode: MASTER_SECURITY_PIN,
   isRoot: true,
 };
 
-const ADMINS_STORAGE_KEY = 'zion_admin_users_v1';
-const SESSION_STORAGE_KEY = 'zion_active_admin_session_v1';
+const ADMINS_STORAGE_KEY = 'zion_admin_users_v2';
+const SESSION_STORAGE_KEY = 'zion_active_admin_session_v2';
 
 /**
  * Retrieve list of authorized administrators.
@@ -159,34 +160,48 @@ export function setActiveSession(user: AdminUser | null): void {
  * Authenticate login attempt
  */
 export function authenticateAdmin(
-  email: string,
+  identifier: string,
   passcode?: string
 ): { success: boolean; user?: AdminUser; message: string } {
-  const normalizedEmail = email.trim().toLowerCase();
-  const admins = getAdminUsers();
+  const cleanId = (identifier || '').trim();
+  const cleanPass = (passcode || '').trim();
 
-  // 1. If Root Admin email
-  if (normalizedEmail === ROOT_ADMIN_EMAIL.toLowerCase()) {
-    // If passcode provided or master pin
-    if (!passcode || passcode === MASTER_SECURITY_PIN || passcode.trim() === 'root' || passcode.trim() === 'zion2026') {
+  if (!cleanId || !cleanPass) {
+    return {
+      success: false,
+      message: '아이디와 비밀번호를 모두 입력해 주세요.',
+    };
+  }
+
+  const normalizedId = cleanId.toLowerCase();
+  const isMasterUser = normalizedId === ROOT_ADMIN_USERNAME.toLowerCase() || normalizedId === ROOT_ADMIN_EMAIL.toLowerCase();
+
+  // 1. Root Admin strictly requires MASTER_SECURITY_PIN ('zionadminPW')
+  if (isMasterUser) {
+    if (cleanPass === MASTER_SECURITY_PIN) {
       setActiveSession(ROOT_ADMIN_USER);
       return {
         success: true,
         user: ROOT_ADMIN_USER,
-        message: `최고 관리자(Super Admin) ${ROOT_ADMIN_USER.email} 로그인 완료`,
+        message: `최고 관리자(Super Admin) ${ROOT_ADMIN_USER.name} 로그인 완료`,
       };
     }
+    return {
+      success: false,
+      message: '비밀번호가 일치하지 않습니다.',
+    };
   }
 
-  // 2. Lookup in admin list
+  // 2. Lookup in registered admins list
+  const admins = getAdminUsers();
   const matchedUser = admins.find(
     (u) =>
-      u.email.toLowerCase() === normalizedEmail ||
-      (passcode && u.passcode?.toLowerCase() === passcode.trim().toLowerCase())
+      u.email.toLowerCase() === normalizedId ||
+      u.id.toLowerCase() === normalizedId
   );
 
   if (matchedUser) {
-    if (!passcode || matchedUser.passcode === passcode.trim() || passcode.trim() === MASTER_SECURITY_PIN) {
+    if (matchedUser.passcode && matchedUser.passcode === cleanPass) {
       setActiveSession(matchedUser);
       return {
         success: true,
@@ -194,11 +209,11 @@ export function authenticateAdmin(
         message: `${matchedUser.name} (${matchedUser.role}) 로그인 완료`,
       };
     }
-    return { success: false, message: '보안 비밀번호(Passcode)가 일치하지 않습니다.' };
+    return { success: false, message: '비밀번호가 일치하지 않습니다.' };
   }
 
   return {
     success: false,
-    message: '등록되지 않은 계정이거나 관리자 권한이 부여되지 않았습니다.',
+    message: '등록되지 않은 관리자 아이디이거나 비밀번호가 일치하지 않습니다.',
   };
 }

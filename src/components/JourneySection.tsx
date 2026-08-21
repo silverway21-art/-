@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
 import { Rocket, Zap, AlertTriangle, ChevronDown, ChevronUp, Flag, Trophy } from 'lucide-react';
-import { JOURNEY_ITEMS } from '../data/portfolioData';
+import { JOURNEY_ITEMS as DEFAULT_JOURNEY_ITEMS } from '../data/portfolioData';
+import { JourneyItem } from '../types';
 
-export const JourneySection: React.FC = () => {
-  const [expandedId, setExpandedId] = useState<string | null>('journey-2026-cospace');
+interface JourneySectionProps {
+  journeyItems?: JourneyItem[];
+}
+
+export const JourneySection: React.FC<JourneySectionProps> = ({ journeyItems }) => {
+  const items = journeyItems && journeyItems.length > 0 ? journeyItems : DEFAULT_JOURNEY_ITEMS;
+  const [expandedId, setExpandedId] = useState<string | null>(items[0]?.id || null);
 
   const toggleExpand = (id: string) => {
     setExpandedId(prev => prev === id ? null : id);
@@ -31,9 +37,10 @@ export const JourneySection: React.FC = () => {
 
       {/* Timeline List */}
       <div className="relative pl-6 sm:pl-8 border-l border-cyan-900/60 space-y-6">
-        {JOURNEY_ITEMS.map((item, index) => {
+        {items.map((item, index) => {
           const isLatest = index === 0;
           const isExpanded = expandedId === item.id;
+
 
           return (
             <div key={item.id} className="relative group">
