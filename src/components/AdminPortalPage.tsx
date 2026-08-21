@@ -250,6 +250,11 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
     });
   };
 
+  const handleReturnHome = () => {
+    onLogout();
+    onNavigateHome();
+  };
+
   // If not logged in, render the Cybernetic Admin Login Portal
   if (!currentUser) {
     return (
@@ -261,7 +266,7 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
         {/* Top Minimal Bar */}
         <header className="relative z-10 px-6 py-4 flex items-center justify-between border-b border-cyan-950/60 bg-[#030816]/70 backdrop-blur-md">
           <button
-            onClick={onNavigateHome}
+            onClick={handleReturnHome}
             className="flex items-center gap-2 text-xs text-cyan-400 hover:text-white transition-colors group"
           >
             <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
@@ -376,7 +381,7 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
       <header className="sticky top-0 z-30 px-4 sm:px-8 py-3.5 bg-[#030919]/90 border-b border-cyan-500/30 backdrop-blur-xl flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={onNavigateHome}
+            onClick={handleReturnHome}
             className="flex items-center gap-2 px-3 py-1.5 bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-800/80 rounded-xl text-xs text-cyan-300 transition-all group"
           >
             <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />

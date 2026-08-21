@@ -226,10 +226,30 @@ export default function App() {
     setIsAdminAuthOpen(false);
   };
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await apiLogout();
     setCurrentUser(null);
-  };
+  }, []);
+
+  // Automatically log out admin when navigating away from '/admin'
+  useEffect(() => {
+    if (currentPath !== '/admin' && currentUser) {
+      handleLogout();
+    }
+  }, [currentPath, currentUser, handleLogout]);
+
+  // Automatically clear session when tab is closed or window is navigated away
+  useEffect(() => {
+    const handleUnload = () => {
+      clearSession();
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
+    };
+  }, []);
 
   const handleOpenEdit = (project: ProjectItem) => {
     setEditingProject(project);
