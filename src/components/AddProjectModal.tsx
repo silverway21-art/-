@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Plus, Trash2, Upload, Sparkles, Languages, Check, Bot, Loader2, ArrowRight, Wand2, Image as ImageIcon, Link as LinkIcon, RotateCcw } from 'lucide-react';
+import { X, Plus, Trash2, Upload, Sparkles, Languages, Check, Bot, Loader2, ArrowRight, Wand2, Image as ImageIcon, Link as LinkIcon, RotateCcw, ChevronUp, ChevronDown, ListOrdered } from 'lucide-react';
 import { ProjectItem } from '../types';
 import zionLogoImg from '../assets/images/zion_robot_logo_1786709549858.jpg';
 import robotLineTracingImg from '../assets/images/robot_line_tracing_1786709526477.jpg';
@@ -28,6 +28,12 @@ const TEMPLATES = [
       { name: "Digital Compass / Gyro (BNO055)", qty: 1, description: "경기장 내 절대 방향 각도 유지" },
       { name: "High-Voltage Solenoid Kicker", qty: 1, description: "승압 회로 기반 순간 슈팅 장치" }
     ],
+    algorithmSteps: [
+      "1. 360도 IR 볼 시커 센서로 축구공 방향 및 거리 탐색",
+      "2. 디지털 나침반(BNO055)으로 골대 방향 정렬 유지",
+      "3. 3-옴니휠 차동 벡터 연산으로 공을 향해 자율 이동 및 드리블",
+      "4. 볼 감지 센서 접촉 확인 시 고전압 솔레노이드 슈팅 트리거"
+    ],
     code: `// Zion's Omni Soccer Bot - Ball Vector Heading
 void trackAndKick() {
   int ballAngle = readIRBallAngle();
@@ -53,6 +59,12 @@ void trackAndKick() {
       { name: "RPLiDAR A1 360° 2D Scanner", qty: 1, description: "최대 12m 반경 레이저 거리 측정 센서" },
       { name: "Raspberry Pi 4 / Jetson Nano", qty: 1, description: "ROS2 노드 연산 및 실시간 매핑 메인보드" },
       { name: "Optical Wheel Encoders", qty: 2, description: "바퀴 회전수 및 오도메트리 위치 추정" }
+    ],
+    algorithmSteps: [
+      "1. 2D 라이다 360도 레이저 스캔 포인트 클라우드 수신",
+      "2. 카토그래퍼 / SLAM 알고리즘으로 점유 격자 지도 생성",
+      "3. A* 및 Nav2 경로 생성기로 최단 주행 경로 연산",
+      "4. 장애물 접근 시 감속 및 실시간 회피 주행 제어"
     ],
     code: `# ROS2 Autonomous Navigation Node
 import rclpy
@@ -80,6 +92,12 @@ def scan_callback(data):
       { name: "4-DOF Robotic Arm with Gripper", qty: 1, description: "금속 기어 서보모터 관절 및 집게" },
       { name: "USB HD Wide-Angle Camera", qty: 1, description: "탑뷰 작업 영역 실시간 비디오 캡처" },
       { name: "PCA9685 16-Ch PWM Servo Driver", qty: 1, description: "I2C 정밀 서보모터 각도 제어" }
+    ],
+    algorithmSteps: [
+      "1. USB 카메라 실시간 프레임 캡처 및 전처리",
+      "2. HSV 색상 마스크 및 윤곽선(Contours) 검출",
+      "3. 목표 물체 3차원 좌표 역기구학(IK) 관절 각도 계산",
+      "4. 4축 서보모터 및 그리퍼 구동으로 분류 적재"
     ],
     code: `# OpenCV Color Mask & Sorting Logic
 import cv2
@@ -124,6 +142,15 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
     { name: 'DC Geared Motors & Rubber Wheels', qty: 2, description: '차동 구동 모터 및 타이어' }
   ]);
 
+  // Algorithm Steps
+  const [algorithmSteps, setAlgorithmSteps] = useState<string[]>([
+    '1. 시스템 센서 데이터 초기화 및 캘리브레이션',
+    '2. 타겟 오차 계산 및 피드백 제어 연산',
+    '3. 모터 드라이버 PWM 출력 신호 변조',
+    '4. 실시간 상태 모니터링 및 예외 회피'
+  ]);
+  const [algoInput, setAlgoInput] = useState('');
+
   // Code snippet
   const [codeSnippet, setCodeSnippet] = useState(`// Zion's Robot Logic
 void setup() {
@@ -147,7 +174,46 @@ void loop() {
     setTagInput(tpl.tags.join(', '));
     setHardwareList(tpl.hardware);
     setCodeSnippet(tpl.code);
+    if (tpl.algorithmSteps) {
+      setAlgorithmSteps(tpl.algorithmSteps);
+    }
     setTranslateSuccessMsg(null);
+  };
+
+  const handleAddAlgoStep = () => {
+    if (algoInput.trim()) {
+      setAlgorithmSteps([...algorithmSteps, algoInput.trim()]);
+      setAlgoInput('');
+    }
+  };
+
+  const handleUpdateAlgoStep = (index: number, val: string) => {
+    const updated = [...algorithmSteps];
+    updated[index] = val;
+    setAlgorithmSteps(updated);
+  };
+
+  const handleMoveAlgoStep = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= algorithmSteps.length) return;
+    const updated = [...algorithmSteps];
+    const temp = updated[index];
+    updated[index] = updated[target];
+    updated[target] = temp;
+    setAlgorithmSteps(updated);
+  };
+
+  const handleRemoveAlgoStep = (index: number) => {
+    setAlgorithmSteps(algorithmSteps.filter((_, i) => i !== index));
+  };
+
+  const handleResetDefaultAlgoSteps = () => {
+    setAlgorithmSteps([
+      '1. 시스템 센서 데이터 초기화 및 캘리브레이션',
+      '2. 타겟 오차 계산 및 피드백 제어 연산',
+      '3. 모터 드라이버 PWM 출력 신호 변조',
+      '4. 실시간 상태 모니터링 및 예외 회피'
+    ]);
   };
 
   // Full AI Auto-Translate (Title, Description, Category, Tags)
@@ -270,12 +336,7 @@ void loop() {
             code: codeSnippet,
           }
         : undefined,
-      algorithmSteps: [
-        '1. 시스템 센서 데이터 초기화 및 캘리브레이션',
-        '2. 타겟 오차 계산 및 피드백 제어 연산',
-        '3. 모터 드라이버 PWM 출력 신호 변조',
-        '4. 실시간 상태 모니터링 및 예외 회피',
-      ],
+      algorithmSteps: algorithmSteps.length > 0 ? algorithmSteps : undefined,
     };
 
     onAddProject(newProject);
@@ -687,6 +748,99 @@ void loop() {
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Algorithm Pipeline Steps */}
+          <div className="space-y-2 p-3.5 rounded-xl bg-[#040c1e] border border-cyan-900/70">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-cyan-950 pb-1.5">
+              <label className="text-xs font-mono-tech text-cyan-300 font-bold flex items-center gap-1.5">
+                <ListOrdered size={14} className="text-cyan-400" />
+                <span>제어 알고리즘 실행 파이프라인 (// PIPELINE STEPS)</span>
+              </label>
+              <button
+                type="button"
+                onClick={handleResetDefaultAlgoSteps}
+                className="text-[11px] text-cyan-400/80 hover:text-cyan-300 hover:underline flex items-center gap-1 font-mono-tech"
+              >
+                <RotateCcw size={11} />
+                <span>표준 4단계로 채우기</span>
+              </button>
+            </div>
+
+            <p className="text-[10px] text-slate-400 font-mono-tech">
+              프로젝트 모달창에 표시되는 실시간 실행 단계 목록입니다. 직접 수정하거나 순서를 변경할 수 있습니다.
+            </p>
+
+            {algorithmSteps.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                {algorithmSteps.map((step, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-[#02050e] border border-cyan-950 rounded-lg p-2">
+                    <span className="text-xs font-bold font-mono-tech text-cyan-400 w-5 text-center flex-shrink-0">
+                      {idx + 1}.
+                    </span>
+                    <input
+                      type="text"
+                      value={step.replace(/^\d+\.\s*/, '')}
+                      onChange={(e) => handleUpdateAlgoStep(idx, `${idx + 1}. ${e.target.value}`)}
+                      placeholder={`단계 ${idx + 1} 설명`}
+                      className="flex-1 bg-[#01040a] border border-cyan-900/60 focus:border-cyan-400 rounded px-2.5 py-1 text-xs text-slate-200 font-mono-tech outline-none"
+                    />
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveAlgoStep(idx, -1)}
+                        disabled={idx === 0}
+                        title="위로 이동"
+                        className="p-1 rounded bg-cyan-950/60 text-cyan-400 hover:text-white disabled:opacity-30"
+                      >
+                        <ChevronUp size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveAlgoStep(idx, 1)}
+                        disabled={idx === algorithmSteps.length - 1}
+                        title="아래로 이동"
+                        className="p-1 rounded bg-cyan-950/60 text-cyan-400 hover:text-white disabled:opacity-30"
+                      >
+                        <ChevronDown size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAlgoStep(idx)}
+                        className="p-1 rounded bg-rose-950/40 text-rose-400 hover:text-rose-200"
+                        title="삭제"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <input
+                type="text"
+                value={algoInput}
+                onChange={(e) => setAlgoInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddAlgoStep();
+                  }
+                }}
+                placeholder="새 단계 입력 후 추가 (예: 초음파 거리 측정 및 긴급 정지)"
+                className="flex-1 bg-[#02050e] border border-cyan-900 focus:border-cyan-400 rounded-lg px-3 py-1.5 text-white text-xs outline-none font-mono-tech"
+              />
+              <button
+                type="button"
+                onClick={handleAddAlgoStep}
+                className="px-3 py-1.5 bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 rounded-lg text-xs flex items-center gap-1 font-mono-tech shrink-0 font-bold"
+              >
+                <Plus size={13} />
+                <span>단계 추가</span>
+              </button>
             </div>
           </div>
 

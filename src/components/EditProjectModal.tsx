@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, Trash2, Upload, Sparkles, Languages, Check, Bot, Loader2, ArrowRight, Image as ImageIcon, Link as LinkIcon, RotateCcw } from 'lucide-react';
+import { X, Plus, Trash2, Upload, Sparkles, Languages, Check, Bot, Loader2, ArrowRight, Image as ImageIcon, Link as LinkIcon, RotateCcw, ChevronUp, ChevronDown, ListOrdered } from 'lucide-react';
 import { ProjectItem } from '../types';
 import zionLogoImg from '../assets/images/zion_robot_logo_1786709549858.jpg';
 import robotLineTracingImg from '../assets/images/robot_line_tracing_1786709526477.jpg';
@@ -102,8 +102,33 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({
     }
   };
 
+  const handleUpdateAlgoStep = (index: number, value: string) => {
+    const updated = [...algorithmSteps];
+    updated[index] = value;
+    setAlgorithmSteps(updated);
+  };
+
+  const handleMoveAlgoStep = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= algorithmSteps.length) return;
+    const updated = [...algorithmSteps];
+    const temp = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = temp;
+    setAlgorithmSteps(updated);
+  };
+
   const handleRemoveAlgoStep = (index: number) => {
     setAlgorithmSteps(algorithmSteps.filter((_, i) => i !== index));
+  };
+
+  const handleResetDefaultAlgoSteps = () => {
+    setAlgorithmSteps([
+      '1. 시스템 센서 데이터 초기화 및 캘리브레이션',
+      '2. 타겟 오차 계산 및 피드백 제어 연산',
+      '3. 모터 드라이버 PWM 출력 신호 변조',
+      '4. 실시간 상태 모니터링 및 예외 회피'
+    ]);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -542,10 +567,114 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({
             )}
           </div>
 
-          {/* Section 5: Code Snippet */}
+          {/* Section 5: Control Algorithm Execution Pipeline */}
+          <div className="space-y-3 p-4 rounded-xl bg-[#040c1e] border border-cyan-900/70 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-cyan-950 pb-2">
+              <div className="text-cyan-400 font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                <ListOrdered size={14} className="text-cyan-400" />
+                <span>05. 제어 알고리즘 실행 파이프라인 (// CONTROL ALGORITHM EXECUTION PIPELINE)</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleResetDefaultAlgoSteps}
+                className="text-[11px] text-cyan-400/80 hover:text-cyan-300 hover:underline flex items-center gap-1 font-mono-tech"
+              >
+                <RotateCcw size={11} />
+                <span>표준 4단계 알고리즘으로 채우기</span>
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-400 font-mono-tech leading-relaxed">
+              프로젝트 상세 모달에 표시되는 알고리즘 실행 단계입니다. 각 단계 텍스트를 직접 수정하거나 순서를 바꿀 수 있습니다.
+            </p>
+
+            {/* Existing Steps List */}
+            {algorithmSteps.length > 0 ? (
+              <div className="space-y-2 pt-1">
+                {algorithmSteps.map((step, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-2 p-2.5 rounded-lg bg-[#02050e] border border-cyan-950 hover:border-cyan-800 transition-colors"
+                  >
+                    <span className="text-xs font-bold font-mono-tech text-cyan-400 w-6 flex-shrink-0 text-center">
+                      {idx + 1}.
+                    </span>
+
+                    <input
+                      type="text"
+                      value={step.replace(/^\d+\.\s*/, '')}
+                      onChange={(e) => handleUpdateAlgoStep(idx, `${idx + 1}. ${e.target.value}`)}
+                      placeholder={`단계 ${idx + 1} 내용 (예: 타겟 오차 계산 및 피드백 제어 연산)`}
+                      className="flex-1 bg-[#01040a] border border-cyan-900/60 focus:border-cyan-400 rounded-md px-3 py-1.5 text-xs text-slate-200 outline-none font-mono-tech"
+                    />
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveAlgoStep(idx, -1)}
+                        disabled={idx === 0}
+                        title="위로 이동"
+                        className="p-1 rounded bg-cyan-950/60 text-cyan-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none"
+                      >
+                        <ChevronUp size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveAlgoStep(idx, 1)}
+                        disabled={idx === algorithmSteps.length - 1}
+                        title="아래로 이동"
+                        className="p-1 rounded bg-cyan-950/60 text-cyan-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none"
+                      >
+                        <ChevronDown size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAlgoStep(idx)}
+                        title="삭제"
+                        className="p-1 rounded bg-rose-950/40 text-rose-400 hover:text-rose-200 hover:bg-rose-900/60"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-3 text-center rounded-lg bg-[#02050e] border border-dashed border-cyan-950 text-xs text-slate-500 font-mono-tech">
+                등록된 파이프라인 단계가 없습니다. 아래에서 단계를 추가해주세요.
+              </div>
+            )}
+
+            {/* Add New Step Input */}
+            <div className="flex gap-2 pt-1">
+              <input
+                type="text"
+                value={algoInput}
+                onChange={(e) => setAlgoInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddAlgoStep();
+                  }
+                }}
+                placeholder="새 알고리즘 단계 입력 후 추가 (예: 실시간 모터 속도 피드백 및 급커브 감속)"
+                className="flex-1 bg-[#02050e] border border-cyan-900 focus:border-cyan-400 rounded-lg px-3 py-2 text-white text-xs outline-none font-mono-tech"
+              />
+              <button
+                type="button"
+                onClick={handleAddAlgoStep}
+                className="px-3.5 py-2 bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 rounded-lg text-xs flex items-center gap-1 font-mono-tech shrink-0 font-bold"
+              >
+                <Plus size={14} />
+                <span>+ 단계 추가</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Section 6: Code Snippet */}
           <div className="space-y-3">
             <div className="text-cyan-400 font-bold text-xs uppercase tracking-wider border-b border-cyan-950 pb-2">
-              <span>05. 핵심 알고리즘 소스코드 (Core Code Snippet)</span>
+              <span>06. 핵심 알고리즘 소스코드 (Core Code Snippet)</span>
             </div>
 
             <div className="flex gap-2 mb-2">
