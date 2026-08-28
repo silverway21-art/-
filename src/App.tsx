@@ -163,7 +163,13 @@ export default function App() {
 
   // Project CRUD Operations (Immediate local state update + Server Firestore persistence)
   const handleAddProject = async (newProject: ProjectItem) => {
-    setProjects((prev) => [newProject, ...prev]);
+    setProjects((prev) => {
+      const next = [newProject, ...prev];
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
     setSelectedProject(newProject);
     setIsAddProjectOpen(false);
 
@@ -175,7 +181,13 @@ export default function App() {
   };
 
   const handleUpdateProject = async (updatedProject: ProjectItem) => {
-    setProjects((prev) => prev.map((p) => (p.id === updatedProject.id ? updatedProject : p)));
+    setProjects((prev) => {
+      const next = prev.map((p) => (p.id === updatedProject.id ? updatedProject : p));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
     if (selectedProject?.id === updatedProject.id) {
       setSelectedProject(updatedProject);
     }
@@ -190,7 +202,13 @@ export default function App() {
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    setProjects((prev) => {
+      const next = prev.filter((p) => p.id !== projectId);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
     if (selectedProject?.id === projectId) {
       setSelectedProject(null);
     }
@@ -335,7 +353,6 @@ export default function App() {
         <Navbar 
           onOpenConnect={() => setIsConnectOpen(true)}
           onOpenTerminal={() => setIsTerminalOpen(true)}
-          onOpenAdmin={() => navigateTo('/admin')}
         />
 
         {/* Main Content */}

@@ -1,17 +1,15 @@
 import React, { useState } from 'react';
-import { Menu, X, Mail, Terminal, Shield } from 'lucide-react';
+import { Menu, X, Mail, Terminal } from 'lucide-react';
 import zionLogoImg from '../assets/images/zion_robot_logo_1786709549858.jpg';
 
 interface NavbarProps {
   onOpenConnect: () => void;
   onOpenTerminal: () => void;
-  onOpenAdmin?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenConnect,
   onOpenTerminal,
-  onOpenAdmin,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -82,7 +80,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           ))}
         </nav>
 
-        {/* Right: Actions (Terminal, Connect, Admin) */}
+        {/* Right: Actions (Terminal, Connect) */}
         <div className="flex items-center gap-2 sm:gap-2.5">
           {/* Terminal button */}
           <button
@@ -104,19 +102,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Mail size={14} />
             <span>Connect</span>
           </button>
-
-          {/* Admin Portal Button */}
-          {onOpenAdmin && (
-            <button
-              id="navbar-admin-btn"
-              onClick={onOpenAdmin}
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-[#040d21] hover:bg-cyan-950/80 text-cyan-400 hover:text-white border border-cyan-800/80 rounded-lg text-xs font-mono-tech font-bold transition-all"
-              title="관리자 포털 (로그인 필요)"
-            >
-              <Shield size={13} className="text-cyan-400" />
-              <span className="hidden lg:inline text-[11px]">Admin</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -154,17 +139,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Mail size={14} /> Connect
             </button>
-            {onOpenAdmin && (
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenAdmin();
-                }}
-                className="w-full flex items-center justify-center gap-2 py-2 text-xs font-mono-tech text-cyan-300 bg-[#030a18] rounded border border-cyan-700/80 font-bold"
-              >
-                <Shield size={14} className="text-cyan-400" /> 관리자 로그인 (Admin Portal)
-              </button>
-            )}
           </div>
         </div>
       )}

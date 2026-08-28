@@ -100,3 +100,15 @@ export interface AuthSession {
   currentUser: AdminUser | null;
 }
 
+export interface ContactMessage {
+  id: string;
+  senderName: string;
+  email: string;
+  subject?: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+  starred?: boolean;
+  replied?: boolean;
+}
+

@@ -1,31 +1,52 @@
 import React, { useState } from 'react';
-import { X, Mail, Send, CheckCircle2, Copy } from 'lucide-react';
+import { X, Mail, Send, CheckCircle2, Copy, Loader2, Sparkles } from 'lucide-react';
+import { apiSendMessage } from '../lib/api';
 
 interface ConnectModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onMessageSent?: () => void;
 }
 
-export const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose }) => {
+export const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose, onMessageSent }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !message) return;
-    setSent(true);
-    setTimeout(() => {
-      setSent(false);
-      setName('');
-      setEmail('');
-      setMessage('');
-      onClose();
-    }, 2200);
+    if (!name.trim() || !message.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      await apiSendMessage({
+        senderName: name.trim(),
+        email: email.trim() || '익명 연락처 (연락처 미기재)',
+        subject: subject.trim() || undefined,
+        message: message.trim(),
+      });
+      setSent(true);
+      if (onMessageSent) onMessageSent();
+
+      setTimeout(() => {
+        setSent(false);
+        setName('');
+        setEmail('');
+        setSubject('');
+        setMessage('');
+        setIsSubmitting(false);
+        onClose();
+      }, 2400);
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      setIsSubmitting(false);
+    }
   };
 
   const handleCopyEmail = () => {
@@ -62,50 +83,66 @@ export const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose }) =
             <div className="w-14 h-14 rounded-full bg-emerald-950/60 border border-emerald-500/80 flex items-center justify-center text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
               <CheckCircle2 size={32} />
             </div>
-            <h3 className="text-base font-bold text-white font-mono-tech">MESSAGE TRANSMITTED</h3>
-            <p className="text-xs text-slate-400 max-w-xs">
-              지온이에게 메시지가 전달되었습니다. 확인 후 회신드리겠습니다!
+            <h3 className="text-base font-bold text-white font-mono-tech">MESSAGE PACKET DISPATCHED</h3>
+            <p className="text-xs text-emerald-400 font-mono-tech">
+              관리자 메일함(Admin Inbox)으로 메시지가 안전하게 도착했습니다!
+            </p>
+            <p className="text-[11px] text-slate-400 max-w-xs">
+              지온이가 관리자 모드에서 실시간으로 확인 후 등록하신 연락처로 회신드립니다.
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+          <form onSubmit={handleSubmit} className="space-y-3.5 pt-3">
             <div>
               <label className="block text-xs font-mono-tech text-cyan-300 mb-1">
-                // SENDER_NAME / 소속 및 성함
+                // SENDER_NAME / 소속 및 성함 <span className="text-rose-400">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="예: 홍길동 (로보틱스 멘토 / 동료)"
+                placeholder="예: 홍길동 (KAIST 로보틱스 연구원 / 대회 동료)"
                 className="w-full px-3 py-2 rounded-lg bg-[#030712] border border-cyan-900 focus:border-cyan-400 text-slate-100 text-xs font-mono-tech focus:outline-none focus:ring-1 focus:ring-cyan-500"
               />
             </div>
 
             <div>
               <label className="block text-xs font-mono-tech text-cyan-300 mb-1">
-                // CONTACT_EMAIL / 연락처 (선택)
+                // CONTACT_EMAIL / 회신받을 이메일 (선택)
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="your.email@domain.com"
+                placeholder="your.email@domain.com (회신을 원하실 경우 입력)"
                 className="w-full px-3 py-2 rounded-lg bg-[#030712] border border-cyan-900 focus:border-cyan-400 text-slate-100 text-xs font-mono-tech focus:outline-none focus:ring-1 focus:ring-cyan-500"
               />
             </div>
 
             <div>
               <label className="block text-xs font-mono-tech text-cyan-300 mb-1">
-                // MESSAGE_PAYLOAD / 내용
+                // SUBJECT / 메시지 제목 (선택)
+              </label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="예: 2026 로봇 경진대회 알고리즘 멘토링 제휴 문의"
+                className="w-full px-3 py-2 rounded-lg bg-[#030712] border border-cyan-900 focus:border-cyan-400 text-slate-100 text-xs font-mono-tech focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono-tech text-cyan-300 mb-1">
+                // MESSAGE_PAYLOAD / 메시지 본문 <span className="text-rose-400">*</span>
               </label>
               <textarea
                 required
-                rows={4}
+                rows={3}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="로봇 대회 제휴, 기술 질문, 응원 메시지를 남겨주세요."
+                placeholder="로봇 대회 제휴, 기술 질문, 응원 메시지를 자유롭게 남겨주세요."
                 className="w-full px-3 py-2 rounded-lg bg-[#030712] border border-cyan-900 focus:border-cyan-400 text-slate-100 text-xs font-mono-tech focus:outline-none focus:ring-1 focus:ring-cyan-500 resize-none"
               />
             </div>
@@ -127,16 +164,27 @@ export const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2 rounded-lg bg-[#030814] hover:bg-cyan-950 text-slate-400 border border-cyan-900 text-xs font-mono-tech transition-colors"
+                disabled={isSubmitting}
+                className="flex-1 py-2 rounded-lg bg-[#030814] hover:bg-cyan-950 text-slate-400 border border-cyan-900 text-xs font-mono-tech transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-bold text-xs font-mono-tech shadow-[0_0_12px_rgba(34,211,238,0.4)] transition-all"
+                disabled={isSubmitting}
+                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black font-bold text-xs font-mono-tech shadow-[0_0_12px_rgba(34,211,238,0.4)] transition-all disabled:opacity-50"
               >
-                <Send size={14} />
-                <span>Send Packet</span>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Transmitting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send size={14} />
+                    <span>Send Packet (메시지 전송)</span>
+                  </>
+                )}
               </button>
             </div>
           </form>

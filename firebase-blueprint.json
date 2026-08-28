@@ -43,6 +43,23 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["adminId", "username", "passwordHash", "salt", "role"]
+    },
+    "ContactMessage": {
+      "title": "ContactMessage",
+      "description": "Visitor contact messages dispatched to Admin inbox",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderName": { "type": "string" },
+        "email": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "read": { "type": "boolean" },
+        "starred": { "type": "boolean" },
+        "replied": { "type": "boolean" }
+      },
+      "required": ["id", "senderName", "message", "createdAt"]
     }
   },
   "firestore": {
@@ -53,6 +70,10 @@
     "/system_admins/{adminId}": {
       "schema": "AdminAccount",
       "description": "Private admin credentials store accessible ONLY by server-side authentication"
+    },
+    "/contact_messages/{messageId}": {
+      "schema": "ContactMessage",
+      "description": "Contact messages sent from public connect modal to admin inbox"
     }
   }
 }

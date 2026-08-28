@@ -29,11 +29,14 @@ import {
   Check,
   Globe,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Mail,
+  Inbox
 } from 'lucide-react';
 import { ProjectItem, AdminUser, SiteConfig, JourneyItem, SkillItem, AwardItem } from '../types';
-import { apiLogin, apiLogout } from '../lib/api';
+import { apiLogin, apiLogout, subscribeToMessages, apiGetMessages } from '../lib/api';
 import { DEFAULT_SITE_CONFIG } from '../data/portfolioData';
+import { AdminMessagesInbox } from './AdminMessagesInbox';
 
 interface AdminPortalPageProps {
   currentUser: AdminUser | null;
@@ -67,8 +70,22 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [activeTab, setActiveTab] = useState<'projects' | 'site_text' | 'security'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'site_text' | 'messages' | 'security'>('projects');
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Keep unread messages count in sync in the background
+  useEffect(() => {
+    apiGetMessages().then(msgs => {
+      setUnreadMessagesCount(msgs.filter(m => !m.read).length);
+    }).catch(() => {});
+
+    const unsub = subscribeToMessages(msgs => {
+      setUnreadMessagesCount(msgs.filter(m => !m.read).length);
+    });
+
+    return () => unsub();
+  }, []);
 
   // Site Configuration Form State
   const [editableConfig, setEditableConfig] = useState<SiteConfig>(siteConfig || DEFAULT_SITE_CONFIG);
@@ -450,6 +467,27 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('messages')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all relative ${
+              activeTab === 'messages'
+                ? 'bg-cyan-500 text-black shadow-[0_0_20px_rgba(6,182,212,0.4)]'
+                : 'bg-[#030919] border border-cyan-900/80 text-slate-300 hover:text-white hover:border-cyan-500/60'
+            }`}
+          >
+            <Mail size={15} />
+            <span>03. 수신 메시지 & 메일함 (Inbox)</span>
+            {unreadMessagesCount > 0 && (
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                activeTab === 'messages'
+                  ? 'bg-black text-amber-300'
+                  : 'bg-amber-400 text-black shadow-[0_0_10px_rgba(251,191,36,0.6)] animate-pulse'
+              }`}>
+                {unreadMessagesCount}
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('security')}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'security'
@@ -458,7 +496,7 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
             }`}
           >
             <ShieldCheck size={15} />
-            <span>03. 보안 및 데이터베이스 상태</span>
+            <span>04. 보안 및 데이터베이스 상태</span>
           </button>
         </div>
 
@@ -1138,7 +1176,12 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
           </div>
         )}
 
-        {/* ===================== TAB 3: SECURITY & DATABASE ===================== */}
+        {/* ===================== TAB 3: MESSAGES & EMAIL INBOX ===================== */}
+        {activeTab === 'messages' && (
+          <AdminMessagesInbox onUnreadCountChange={setUnreadMessagesCount} />
+        )}
+
+        {/* ===================== TAB 4: SECURITY & DATABASE ===================== */}
         {activeTab === 'security' && (
           <div className="space-y-6 animate-in fade-in">
             <div className="p-6 bg-[#030919]/90 border border-cyan-900/80 rounded-2xl space-y-6">

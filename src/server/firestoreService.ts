@@ -12,7 +12,7 @@ import {
   deleteDoc 
 } from 'firebase/firestore';
 import { SERVER_INITIAL_PROJECTS } from './initialProjects.js';
-import { ProjectItem } from '../types.js';
+import { ProjectItem, ContactMessage } from '../types.js';
 
 // Read Firebase Config
 let firebaseConfig: any = {};
@@ -284,30 +284,42 @@ export async function getProjectsFromDb(): Promise<ProjectItem[]> {
   return localProjectsCache;
 }
 
+const serverDeletedMessageIds = new Set<string>();
+
 /**
  * Save / Update project in Firestore
  */
 export async function saveProjectToDb(project: ProjectItem): Promise<boolean> {
+  const clean: any = { ...project };
+  for (const key of Object.keys(clean)) {
+    if (clean[key] === undefined) {
+      delete clean[key];
+    }
+  }
+  if (!Array.isArray(clean.tags)) clean.tags = [];
+  if (!Array.isArray(clean.hardwareBOM)) clean.hardwareBOM = [];
+  if (!Array.isArray(clean.algorithmSteps)) clean.algorithmSteps = [];
+
   try {
-    const docRef = doc(serverDb, 'projects', project.id);
-    await setDoc(docRef, project, { merge: true });
+    const docRef = doc(serverDb, 'projects', clean.id);
+    await setDoc(docRef, clean, { merge: true });
     
     // Update local cache
-    const idx = localProjectsCache.findIndex(p => p.id === project.id);
+    const idx = localProjectsCache.findIndex(p => p.id === clean.id);
     if (idx >= 0) {
-      localProjectsCache[idx] = project;
+      localProjectsCache[idx] = clean as ProjectItem;
     } else {
-      localProjectsCache.unshift(project);
+      localProjectsCache.unshift(clean as ProjectItem);
     }
     return true;
   } catch (e) {
     console.error('[Server DB] Failed to save project to Firestore:', e);
     // Fallback to local cache
-    const idx = localProjectsCache.findIndex(p => p.id === project.id);
+    const idx = localProjectsCache.findIndex(p => p.id === clean.id);
     if (idx >= 0) {
-      localProjectsCache[idx] = project;
+      localProjectsCache[idx] = clean as ProjectItem;
     } else {
-      localProjectsCache.unshift(project);
+      localProjectsCache.unshift(clean as ProjectItem);
     }
     return true;
   }
@@ -364,4 +376,131 @@ export async function saveSiteConfigToDb(config: any): Promise<boolean> {
     return true;
   }
 }
+
+// ==========================================
+// Contact Messages (Admin Inbox) Support
+// ==========================================
+const INITIAL_MESSAGES: ContactMessage[] = [
+  {
+    id: 'msg_init_kaist_mentor',
+    senderName: '이동현 연구원 (KAIST 로보틱스 연구실)',
+    email: 'dh.lee.robotics@kaist.ac.kr',
+    subject: '로봇 기구학 및 역기구학 시뮬레이션 제어 알고리즘 멘토링 제휴',
+    message: '안녕하세요, 김지온 학생. 포트폴리오에 등록된 Inverse Kinematics 2축 로봇 암과 자율주행 AGV 경로 탐색 프로젝트 코드를 인상 깊게 살펴보았습니다. 고등학교/청소년 로봇 경진대회 준비 및 모터 토크 튜닝 관련하여 온/오프라인 멘토링 및 실험 장비 지원이 가능하니 편하게 연락 바랍니다.',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
+    read: false,
+    starred: true,
+    replied: false,
+  },
+  {
+    id: 'msg_init_competition_org',
+    senderName: '2026 청소년 로봇 페스티벌 조직위원회',
+    email: 'info@korea-robot-festival.org',
+    subject: '2026 자율주행 탐사 로봇 경진대회 사전 참가 신청 접수 안내',
+    message: '김지온 학생, 2026 자율주행 탐사 로봇 부문 참가 접수 및 기술 보고서 초안이 정상 확인되었습니다. LiDAR-SLAM 매핑 센서 데이터와 하드웨어 BOM 규격이 적합하게 통과되었음을 안내드립니다. 본선 대회장 부스 배정은 대회 2주 전에 발송됩니다.',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(), // 1 day ago
+    read: true,
+    starred: false,
+    replied: true,
+  }
+];
+
+let localMessagesCache: ContactMessage[] = [...INITIAL_MESSAGES];
+
+/**
+ * Get all contact messages from Firestore, sorted by createdAt desc
+ */
+export async function getMessagesFromDb(): Promise<ContactMessage[]> {
+  try {
+    const colRef = collection(serverDb, 'contact_messages');
+    const snapshot = await getDocs(colRef);
+    if (!snapshot.empty) {
+      const messages: ContactMessage[] = [];
+      snapshot.forEach(docSnap => {
+        if (!serverDeletedMessageIds.has(docSnap.id)) {
+          messages.push({ id: docSnap.id, ...(docSnap.data() as any) });
+        }
+      });
+      // Sort newest first
+      messages.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      localMessagesCache = messages;
+      return messages;
+    } else {
+      localMessagesCache = [];
+      return [];
+    }
+  } catch (e) {
+    console.warn('[Server DB] Failed to fetch messages from Firestore, using local cache:', e);
+  }
+  return localMessagesCache.filter(m => !serverDeletedMessageIds.has(m.id));
+}
+
+/**
+ * Save new contact message to Firestore
+ */
+export async function saveMessageToDb(msg: ContactMessage): Promise<boolean> {
+  try {
+    const docRef = doc(serverDb, 'contact_messages', msg.id);
+    await setDoc(docRef, msg);
+    // Update local cache
+    const existingIdx = localMessagesCache.findIndex(m => m.id === msg.id);
+    if (existingIdx >= 0) {
+      localMessagesCache[existingIdx] = msg;
+    } else {
+      localMessagesCache.unshift(msg);
+    }
+    return true;
+  } catch (e) {
+    console.error('[Server DB] Failed to save message to Firestore:', e);
+    // Save to local cache anyway
+    const existingIdx = localMessagesCache.findIndex(m => m.id === msg.id);
+    if (existingIdx >= 0) {
+      localMessagesCache[existingIdx] = msg;
+    } else {
+      localMessagesCache.unshift(msg);
+    }
+    return true;
+  }
+}
+
+/**
+ * Update message status (e.g. read, starred, replied)
+ */
+export async function updateMessageStatusInDb(id: string, updates: Partial<ContactMessage>): Promise<boolean> {
+  try {
+    const docRef = doc(serverDb, 'contact_messages', id);
+    await setDoc(docRef, updates, { merge: true });
+    // Update local cache
+    const existingIdx = localMessagesCache.findIndex(m => m.id === id);
+    if (existingIdx >= 0) {
+      localMessagesCache[existingIdx] = { ...localMessagesCache[existingIdx], ...updates };
+    }
+    return true;
+  } catch (e) {
+    console.error('[Server DB] Failed to update message in Firestore:', e);
+    const existingIdx = localMessagesCache.findIndex(m => m.id === id);
+    if (existingIdx >= 0) {
+      localMessagesCache[existingIdx] = { ...localMessagesCache[existingIdx], ...updates };
+    }
+    return true;
+  }
+}
+
+/**
+ * Delete message from Firestore
+ */
+export async function deleteMessageFromDb(id: string): Promise<boolean> {
+  serverDeletedMessageIds.add(id);
+  try {
+    const docRef = doc(serverDb, 'contact_messages', id);
+    await deleteDoc(docRef);
+    localMessagesCache = localMessagesCache.filter(m => m.id !== id);
+    return true;
+  } catch (e) {
+    console.error('[Server DB] Failed to delete message from Firestore:', e);
+    localMessagesCache = localMessagesCache.filter(m => m.id !== id);
+    return true;
+  }
+}
+
 

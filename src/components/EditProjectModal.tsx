@@ -51,8 +51,11 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const currentProjectIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (project) {
+    if (project && (project.id !== currentProjectIdRef.current || isOpen)) {
+      currentProjectIdRef.current = project.id;
       setTitle(project.title || '');
       setCategory(project.category || '');
       setDescriptionKo(project.descriptionKo || '');
@@ -64,9 +67,12 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({
       setHardwareBOM(project.hardwareBOM || []);
       setCodeLang(project.codeSnippet?.language || 'cpp');
       setCodeContent(project.codeSnippet?.code || '');
-      setAlgorithmSteps(project.algorithmSteps || []);
+      
+      // Clean leading number prefix so steps in state are pure text
+      const cleanSteps = (project.algorithmSteps || []).map((s) => s.replace(/^\d+\.\s*/, ''));
+      setAlgorithmSteps(cleanSteps);
     }
-  }, [project]);
+  }, [project?.id, isOpen]);
 
   if (!isOpen || !project) return null;
 
@@ -96,8 +102,9 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({
   };
 
   const handleAddAlgoStep = () => {
-    if (algoInput.trim()) {
-      setAlgorithmSteps([...algorithmSteps, algoInput.trim()]);
+    const clean = algoInput.trim().replace(/^\d+\.\s*/, '');
+    if (clean) {
+      setAlgorithmSteps([...algorithmSteps, clean]);
       setAlgoInput('');
     }
   };
@@ -124,10 +131,10 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({
 
   const handleResetDefaultAlgoSteps = () => {
     setAlgorithmSteps([
-      '1. 시스템 센서 데이터 초기화 및 캘리브레이션',
-      '2. 타겟 오차 계산 및 피드백 제어 연산',
-      '3. 모터 드라이버 PWM 출력 신호 변조',
-      '4. 실시간 상태 모니터링 및 예외 회피'
+      '시스템 센서 데이터 초기화 및 캘리브레이션',
+      '타겟 오차 계산 및 피드백 제어 연산',
+      '모터 드라이버 PWM 출력 신호 변조',
+      '실시간 상태 모니터링 및 예외 회피'
     ]);
   };
 
@@ -185,6 +192,12 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({
     e.preventDefault();
     if (!title.trim()) return;
 
+    // Cleanly normalize steps with numerical prefixes
+    const formattedSteps = algorithmSteps
+      .map((s) => s.trim().replace(/^\d+\.\s*/, ''))
+      .filter(Boolean)
+      .map((s, idx) => `${idx + 1}. ${s}`);
+
     const updatedItem: ProjectItem = {
       ...project,
       title: title.trim(),
@@ -195,8 +208,8 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({
       tags: tags.length > 0 ? tags : ['robotics', 'control'],
       status: status,
       featured: featured,
-      hardwareBOM: hardwareBOM.length > 0 ? hardwareBOM : undefined,
-      algorithmSteps: algorithmSteps.length > 0 ? algorithmSteps : undefined,
+      hardwareBOM: hardwareBOM.length > 0 ? hardwareBOM : [],
+      algorithmSteps: formattedSteps.length > 0 ? formattedSteps : [],
       codeSnippet: codeContent.trim()
         ? {
             language: codeLang,
@@ -602,8 +615,13 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({
 
                     <input
                       type="text"
-                      value={step.replace(/^\d+\.\s*/, '')}
-                      onChange={(e) => handleUpdateAlgoStep(idx, `${idx + 1}. ${e.target.value}`)}
+                      value={step}
+                      onChange={(e) => handleUpdateAlgoStep(idx, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                        }
+                      }}
                       placeholder={`단계 ${idx + 1} 내용 (예: 타겟 오차 계산 및 피드백 제어 연산)`}
                       className="flex-1 bg-[#01040a] border border-cyan-900/60 focus:border-cyan-400 rounded-md px-3 py-1.5 text-xs text-slate-200 outline-none font-mono-tech"
                     />

@@ -12,7 +12,11 @@ import {
   saveProjectToDb,
   deleteProjectFromDb,
   getSiteConfigFromDb,
-  saveSiteConfigToDb
+  saveSiteConfigToDb,
+  getMessagesFromDb,
+  saveMessageToDb,
+  updateMessageStatusInDb,
+  deleteMessageFromDb
 } from './src/server/firestoreService';
 
 
@@ -170,6 +174,75 @@ app.delete('/api/admin/projects/:id', requireAdminAuth, async (req, res) => {
     return res.json({ success: true, deletedId: id });
   } catch (err: any) {
     console.error('Delete project error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// Contact Messages (Inbox) API Endpoints
+// ==========================================
+
+// Public: Send new message from default window Connect Modal
+app.post('/api/messages', async (req, res) => {
+  try {
+    const { senderName, email, message, subject } = req.body;
+    if (!senderName || !message) {
+      return res.status(400).json({ success: false, message: '발신자 성함과 메시지 내용을 입력해 주세요.' });
+    }
+
+    const newMsg = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      senderName: senderName.trim(),
+      email: (email || '').trim(),
+      subject: (subject || '').trim() || (message.trim().slice(0, 35) + (message.trim().length > 35 ? '...' : '')),
+      message: message.trim(),
+      createdAt: new Date().toISOString(),
+      read: false,
+      starred: false,
+      replied: false,
+    };
+
+    await saveMessageToDb(newMsg);
+    console.log(`[Messages] New incoming message from ${newMsg.senderName} (${newMsg.email}): "${newMsg.subject}"`);
+    return res.json({ success: true, message: newMsg });
+  } catch (err: any) {
+    console.error('Send message error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get all messages (Admin Inbox)
+app.get('/api/messages', async (req, res) => {
+  try {
+    const messages = await getMessagesFromDb();
+    return res.json({ success: true, messages });
+  } catch (err: any) {
+    console.error('Fetch messages error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update message status (read / unread, starred, replied)
+app.patch('/api/messages/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    await updateMessageStatusInDb(id, updates);
+    return res.json({ success: true, id, updates });
+  } catch (err: any) {
+    console.error('Update message error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Delete message
+app.delete('/api/messages/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await deleteMessageFromDb(id);
+    return res.json({ success: true, deletedId: id });
+  } catch (err: any) {
+    console.error('Delete message error:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

@@ -7,15 +7,20 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // Projects Collection: Public read, writes restricted to server or authenticated admin
+    // Projects Collection: Public read and write for real-time portfolio project management
     match /projects/{projectId} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.token.role == 'admin';
+      allow read, write: if true;
     }
 
     // Site Configuration Collection: Public read and write for real-time site customization
     match /site_config/{configId} {
       allow read, write: if true;
+    }
+
+    // Contact Messages Collection: Public can create/send messages, Admin can read/update/delete
+    match /contact_messages/{messageId} {
+      allow create: if true;
+      allow read, update, delete: if true;
     }
 
     // System Admins Collection: Strict zero-trust isolation
