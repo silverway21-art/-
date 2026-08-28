@@ -117,3 +117,25 @@ export interface ContactMessage {
   accessCode?: string;
 }
 
+export interface ThemeTrack {
+  id: string;
+  title: string;
+  artist: string;
+  url: string; // HTTP(S) URL, Data URL (base64 audio), or 'synth:cyber-matrix', 'synth:lofi-pulse'
+  category?: string;
+  duration?: string;
+  addedAt?: string;
+  isPreset?: boolean;
+}
+
+export interface MusicConfig {
+  enabled: boolean;
+  activeTrackId: string;
+  defaultVolume: number; // 0.0 to 1.0
+  loop: boolean;
+  autoPlayPrompt: boolean;
+  tracks: ThemeTrack[];
+  updatedAt?: string;
+}
+
+

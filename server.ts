@@ -13,6 +13,8 @@ import {
   deleteProjectFromDb,
   getSiteConfigFromDb,
   saveSiteConfigToDb,
+  getMusicConfigFromDb,
+  saveMusicConfigToDb,
   getMessagesFromDb,
   saveMessageToDb,
   updateMessageStatusInDb,
@@ -110,6 +112,17 @@ app.get('/api/site-config', async (req, res) => {
   }
 });
 
+// Public Music Config Retrieval (Backed by Firestore)
+app.get('/api/music-config', async (req, res) => {
+  try {
+    const musicConfig = await getMusicConfigFromDb();
+    return res.json({ success: true, musicConfig });
+  } catch (err: any) {
+    console.error('Fetch music-config error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Middleware to guard Admin Project Mutation APIs
 const requireAdminAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers.authorization;
@@ -135,6 +148,22 @@ app.put('/api/admin/site-config', requireAdminAuth, async (req, res) => {
     return res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// Admin: Update Music Config
+app.put('/api/admin/music-config', requireAdminAuth, async (req, res) => {
+  try {
+    const musicData = req.body;
+    if (!musicData) {
+      return res.status(400).json({ success: false, message: '음악 설정 데이터가 누락되었습니다.' });
+    }
+    await saveMusicConfigToDb(musicData);
+    return res.json({ success: true, musicConfig: musicData });
+  } catch (err: any) {
+    console.error('Update music config error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 
 // Admin: Create Project

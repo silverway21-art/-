@@ -31,17 +31,24 @@ import {
   Upload,
   Image as ImageIcon,
   Mail,
-  Inbox
+  Inbox,
+  Music,
+  Disc,
+  Volume2,
+  Power
 } from 'lucide-react';
-import { ProjectItem, AdminUser, SiteConfig, JourneyItem, SkillItem, AwardItem } from '../types';
+import { ProjectItem, AdminUser, SiteConfig, JourneyItem, SkillItem, AwardItem, ThemeTrack, MusicConfig } from '../types';
 import { apiLogin, apiLogout, subscribeToMessages, apiGetMessages } from '../lib/api';
 import { DEFAULT_SITE_CONFIG } from '../data/portfolioData';
 import { AdminMessagesInbox } from './AdminMessagesInbox';
+import { AdminThemeMusicModal } from './AdminThemeMusicModal';
+import { cyberAudioEngine } from '../lib/cyberAudioEngine';
 
 interface AdminPortalPageProps {
   currentUser: AdminUser | null;
   projects: ProjectItem[];
   siteConfig: SiteConfig;
+  musicConfig: MusicConfig;
   onNavigateHome: () => void;
   onLoginSuccess: (user: AdminUser) => void;
   onLogout: () => void;
@@ -50,12 +57,14 @@ interface AdminPortalPageProps {
   onDeleteProject: (projectId: string) => void;
   onSelectProjectPreview: (project: ProjectItem) => void;
   onSaveSiteConfig: (newConfig: Partial<SiteConfig>) => Promise<boolean>;
+  onSaveMusicConfig: (updatedConfig: MusicConfig) => Promise<boolean>;
 }
 
 export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
   currentUser,
   projects,
   siteConfig,
+  musicConfig,
   onNavigateHome,
   onLoginSuccess,
   onLogout,
@@ -64,15 +73,18 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
   onDeleteProject,
   onSelectProjectPreview,
   onSaveSiteConfig,
+  onSaveMusicConfig,
 }) => {
   // Login form state
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [activeTab, setActiveTab] = useState<'projects' | 'site_text' | 'messages' | 'security'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'site_text' | 'messages' | 'security' | 'music'>('projects');
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isMusicModalOpen, setIsMusicModalOpen] = useState(false);
+
 
   // Keep unread messages count in sync in the background
   useEffect(() => {
@@ -97,6 +109,137 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
       setEditableConfig(siteConfig);
     }
   }, [siteConfig]);
+
+  // Theme Music Configuration State
+  const [localMusicConfig, setLocalMusicConfig] = useState<MusicConfig>(musicConfig);
+  const [previewMusicTrackId, setPreviewMusicTrackId] = useState<string | null>(null);
+  const [isSavingMusic, setIsSavingMusic] = useState(false);
+  const [musicSaveSuccess, setMusicSaveSuccess] = useState(false);
+  const [musicAddMode, setMusicAddMode] = useState<'url' | 'file' | 'presets'>('url');
+  const [newMusicTitle, setNewMusicTitle] = useState('');
+  const [newMusicArtist, setNewMusicArtist] = useState('');
+  const [newMusicCategory, setNewMusicCategory] = useState('Cyberpunk');
+  const [newMusicUrl, setNewMusicUrl] = useState('');
+  const [musicUploadFileName, setMusicUploadFileName] = useState('');
+  const [musicFileError, setMusicFileError] = useState('');
+
+  useEffect(() => {
+    if (musicConfig) {
+      setLocalMusicConfig(musicConfig);
+    }
+  }, [musicConfig]);
+
+  const handleToggleGlobalMusic = () => {
+    setLocalMusicConfig(prev => ({ ...prev, enabled: !prev.enabled }));
+  };
+
+  const handleSetGlobalActiveTrack = (id: string) => {
+    setLocalMusicConfig(prev => ({ ...prev, activeTrackId: id }));
+  };
+
+  const handlePreviewMusicTrack = (track: ThemeTrack) => {
+    if (previewMusicTrackId === track.id) {
+      cyberAudioEngine.pause();
+      setPreviewMusicTrackId(null);
+    } else {
+      cyberAudioEngine.playTrack(track);
+      setPreviewMusicTrackId(track.id);
+    }
+  };
+
+  const handleDeleteMusicTrack = (id: string) => {
+    if (localMusicConfig.tracks.length <= 1) {
+      alert('최소 1개 이상의 테마곡이 등록되어 있어야 합니다.');
+      return;
+    }
+    if (confirm('이 테마곡을 삭제하시겠습니까?')) {
+      if (previewMusicTrackId === id) {
+        cyberAudioEngine.pause();
+        setPreviewMusicTrackId(null);
+      }
+      setLocalMusicConfig(prev => {
+        const nextTracks = prev.tracks.filter(t => t.id !== id);
+        let nextActive = prev.activeTrackId;
+        if (nextActive === id) nextActive = nextTracks[0]?.id || '';
+        return { ...prev, tracks: nextTracks, activeTrackId: nextActive };
+      });
+    }
+  };
+
+  const handleMusicFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setMusicFileError('');
+    if (file.size > 15 * 1024 * 1024) {
+      setMusicFileError('오디오 파일 크기가 15MB를 초과합니다.');
+      return;
+    }
+    setMusicUploadFileName(file.name);
+    if (!newMusicTitle) {
+      setNewMusicTitle(file.name.replace(/\.[^/.]+$/, ""));
+    }
+    if (!newMusicArtist) {
+      setNewMusicArtist('User Custom Audio');
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) setNewMusicUrl(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddMusicTrackSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMusicTitle.trim()) {
+      alert('테마곡 제목을 입력해 주세요.');
+      return;
+    }
+    if (!newMusicUrl.trim()) {
+      alert('오디오 웹 URL을 입력하거나 음악 파일을 선택해 주세요.');
+      return;
+    }
+
+    const newTrack: ThemeTrack = {
+      id: `track_custom_${Date.now()}`,
+      title: newMusicTitle.trim(),
+      artist: newMusicArtist.trim() || 'Zion Robotics Lab',
+      url: newMusicUrl.trim(),
+      category: newMusicCategory.trim() || 'Custom Theme',
+      duration: 'Audio',
+      addedAt: new Date().toISOString(),
+      isPreset: false,
+    };
+
+    setLocalMusicConfig(prev => ({
+      ...prev,
+      tracks: [newTrack, ...prev.tracks],
+      activeTrackId: prev.activeTrackId || newTrack.id,
+    }));
+
+    setNewMusicTitle('');
+    setNewMusicArtist('');
+    setNewMusicUrl('');
+    setMusicUploadFileName('');
+    alert('새 테마곡이 추가되었습니다! 우측 상단의 [테마곡 설정 저장]을 눌러 서버에 반영해 주세요.');
+  };
+
+  const handleSaveLocalMusic = async () => {
+    setIsSavingMusic(true);
+    setMusicSaveSuccess(false);
+    try {
+      const ok = await onSaveMusicConfig(localMusicConfig);
+      if (ok) {
+        setMusicSaveSuccess(true);
+        setTimeout(() => setMusicSaveSuccess(false), 3000);
+      }
+    } catch (e) {
+      alert('음악 설정 저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsSavingMusic(false);
+    }
+  };
+
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -497,6 +640,25 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
           >
             <ShieldCheck size={15} />
             <span>04. 보안 및 데이터베이스 상태</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('music')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all relative ${
+              activeTab === 'music'
+                ? 'bg-cyan-500 text-black shadow-[0_0_20px_rgba(6,182,212,0.4)]'
+                : 'bg-[#030919] border border-cyan-900/80 text-slate-300 hover:text-white hover:border-cyan-500/60'
+            }`}
+          >
+            <Music size={15} />
+            <span>05. 테마곡 & 배경음악 설정 (BGM Studio)</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              musicConfig?.enabled 
+                ? activeTab === 'music' ? 'bg-black text-emerald-400' : 'bg-emerald-500 text-black' 
+                : 'bg-rose-950 text-rose-300 border border-rose-800'
+            }`}>
+              {musicConfig?.enabled ? 'BGM ON' : 'BGM OFF'}
+            </span>
           </button>
         </div>
 
@@ -1224,7 +1386,477 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
           </div>
         )}
 
+        {/* ===================== TAB 5: THEME MUSIC & BGM MANAGEMENT ===================== */}
+        {activeTab === 'music' && (
+          <div className="space-y-6 animate-in fade-in">
+            {/* Title & Quick Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#040c20]/70 border border-cyan-900/60 rounded-2xl p-5 backdrop-blur-md">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs text-cyan-400 font-bold">
+                  <Music size={14} />
+                  <span>THEME AUDIO & BGM MATRIX</span>
+                </div>
+                <h1 className="text-xl sm:text-2xl font-bold text-white">
+                  테마곡 등록 및 사이트 배경음악(BGM) 제어
+                </h1>
+                <p className="text-xs text-slate-400">
+                  방문자가 사이트 접속 시 재생되는 테마곡을 추가하고, BGM 켜기/끄기를 설정합니다. 별도의 독립 팝업 창으로 띄워서 관리할 수도 있습니다.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsMusicModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-700/80 text-cyan-300 font-bold text-xs rounded-xl transition-all shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+                >
+                  <ExternalLink size={14} />
+                  <span>별도 팝업 창으로 분리해서 열기</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveLocalMusic}
+                  disabled={isSavingMusic}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-400 text-black font-bold text-xs sm:text-sm rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSavingMusic ? (
+                    <>
+                      <RefreshCw size={15} className="animate-spin" />
+                      <span>저장 중...</span>
+                    </>
+                  ) : musicSaveSuccess ? (
+                    <>
+                      <Check size={15} />
+                      <span>저장 완료!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={15} />
+                      <span>테마곡 설정 저장</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Master Control Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Card 1: Music Toggle */}
+              <div className={`p-5 rounded-2xl border transition-all ${
+                localMusicConfig.enabled 
+                  ? 'bg-emerald-950/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)]' 
+                  : 'bg-rose-950/20 border-rose-800/50'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300">전체 배경음악 상태</span>
+                  <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full ${
+                    localMusicConfig.enabled ? 'bg-emerald-400 text-black' : 'bg-rose-500 text-white'
+                  }`}>
+                    {localMusicConfig.enabled ? '활성화 (ON)' : '비활성화 (OFF)'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-2 mb-4">
+                  포트폴리오에 BGM 재생 버튼 노출 및 자동/수동 음악 시스템 활성화 여부
+                </p>
+                <button
+                  type="button"
+                  onClick={handleToggleGlobalMusic}
+                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    localMusicConfig.enabled
+                      ? 'bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500 text-rose-200'
+                      : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)]'
+                  }`}
+                >
+                  <Power size={14} />
+                  <span>{localMusicConfig.enabled ? '음악 완전히 끄기 (Turn Off)' : '음악 켜기 (Turn On)'}</span>
+                </button>
+              </div>
+
+              {/* Card 2: Volume */}
+              <div className="p-5 rounded-2xl bg-[#030919] border border-cyan-950 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300">기본 시작 볼륨</span>
+                  <span className="text-xs font-mono-tech text-cyan-400 font-bold">
+                    {Math.round(localMusicConfig.defaultVolume * 100)}%
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  방문자가 사이트 접속 시 적용될 기본 사운드 음량 크기
+                </p>
+                <div className="pt-3 flex items-center gap-3">
+                  <Volume2 size={18} className="text-cyan-400" />
+                  <input
+                    type="range"
+                    min="0.05"
+                    max="1"
+                    step="0.05"
+                    value={localMusicConfig.defaultVolume}
+                    onChange={(e) => setLocalMusicConfig(prev => ({ ...prev, defaultVolume: parseFloat(e.target.value) }))}
+                    className="flex-1 h-2 bg-cyan-950 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                  />
+                </div>
+              </div>
+
+              {/* Card 3: Active Song */}
+              <div className="p-5 rounded-2xl bg-[#030919] border border-cyan-950 space-y-2">
+                <span className="text-xs font-bold text-slate-300">현재 대표 테마곡</span>
+                <p className="text-xs text-slate-400">
+                  방문자가 메인 화면에서 가장 먼저 듣게 되는 기본 곡
+                </p>
+                <div className="p-3 bg-[#01040f] border border-cyan-900 rounded-xl flex items-center gap-2.5">
+                  <Disc size={18} className="text-cyan-400 shrink-0" />
+                  <div className="overflow-hidden">
+                    <div className="text-xs font-bold text-cyan-300 truncate">
+                      {localMusicConfig.tracks.find(t => t.id === localMusicConfig.activeTrackId)?.title || '선택된 테마곡 없음'}
+                    </div>
+                    <div className="text-[11px] text-slate-400 truncate">
+                      {localMusicConfig.tracks.find(t => t.id === localMusicConfig.activeTrackId)?.artist || ''}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Add New Theme Song Box */}
+            <div className="p-6 bg-[#030919] border border-cyan-900/60 rounded-2xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-cyan-950">
+                <div className="flex items-center gap-2">
+                  <Plus size={16} className="text-cyan-400" />
+                  <h3 className="text-sm font-bold text-white">새 테마곡 추가 (Add Theme Track)</h3>
+                </div>
+
+                {/* Sub-tabs */}
+                <div className="flex items-center gap-1.5 p-1 bg-black/60 rounded-xl border border-cyan-950 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setMusicAddMode('url')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      musicAddMode === 'url' ? 'bg-cyan-500 text-black font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    오디오 웹 링크 (URL)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMusicAddMode('file')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      musicAddMode === 'file' ? 'bg-cyan-500 text-black font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    컴퓨터 파일 업로드 (MP3/WAV)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMusicAddMode('presets')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      musicAddMode === 'presets' ? 'bg-cyan-500 text-black font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    사이버 프리셋 선택
+                  </button>
+                </div>
+              </div>
+
+              {musicAddMode === 'presets' ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-400">
+                    로봇 공학 포트폴리오에 어울리는 추천 고품질 테마 사운드트랙입니다. 클릭하여 바로 추가할 수 있습니다:
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      {
+                        id: 'track_preset_synth_1',
+                        title: 'Neural Matrix Protocol (사이버 앰비언트 신스)',
+                        artist: 'Zion Robotics Audio Lab',
+                        url: 'synth:cyber-matrix',
+                        category: 'Cyberpunk Ambient',
+                        duration: 'Procedural Loop',
+                        isPreset: true,
+                      },
+                      {
+                        id: 'track_preset_synth_2',
+                        title: 'Autonomous Pulse (로보틱스 로우파이 비트)',
+                        artist: 'Zion Engineering Core',
+                        url: 'synth:lofi-pulse',
+                        category: 'Lo-Fi Focus',
+                        duration: 'Procedural Loop',
+                        isPreset: true,
+                      },
+                      {
+                        id: 'track_preset_audio_1',
+                        title: 'Futuristic Sci-Fi Laboratory Ambient',
+                        artist: 'Creative Commons Audio',
+                        url: 'https://actions.google.com/sounds/v1/science_fiction/sci_fi_ambient.ogg',
+                        category: 'Sci-Fi Sound',
+                        duration: '01:30',
+                        isPreset: true,
+                      },
+                      {
+                        id: 'track_preset_audio_2',
+                        title: 'Deep Space Robotics Station Hum',
+                        artist: 'Free Sound Archive',
+                        url: 'https://actions.google.com/sounds/v1/science_fiction/lab_hum.ogg',
+                        category: 'Deep Drone',
+                        duration: '01:05',
+                        isPreset: true,
+                      }
+                    ].map((preset) => (
+                      <div 
+                        key={preset.id}
+                        className="p-3.5 bg-[#01040f] border border-cyan-950 hover:border-cyan-800 rounded-xl flex items-center justify-between gap-2"
+                      >
+                        <div>
+                          <div className="text-xs font-bold text-white">{preset.title}</div>
+                          <div className="text-[11px] text-slate-400">{preset.artist} • {preset.category}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handlePreviewMusicTrack(preset)}
+                            className="p-2 text-cyan-400 hover:bg-cyan-950 rounded-lg border border-cyan-900"
+                            title="미리듣기"
+                          >
+                            {previewMusicTrackId === preset.id ? <Pause size={14} /> : <Play size={14} />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const exists = localMusicConfig.tracks.some(t => t.id === preset.id);
+                              if (exists) {
+                                alert('이미 목록에 존재하는 곡입니다.');
+                                return;
+                              }
+                              setLocalMusicConfig(prev => ({ ...prev, tracks: [...prev.tracks, preset] }));
+                              alert(`"${preset.title}"이(가) 추가되었습니다. 상단의 [테마곡 설정 저장]을 눌러주세요.`);
+                            }}
+                            className="px-2.5 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-bold rounded-lg transition-colors"
+                          >
+                            추가하기
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleAddMusicTrackSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        테마곡 제목 (Title) *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="예: Zion Cyberpunk Theme"
+                        value={newMusicTitle}
+                        onChange={(e) => setNewMusicTitle(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#01040f] border border-cyan-950 focus:border-cyan-400 rounded-xl text-xs text-white outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        아티스트 / 소스 (Artist)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="예: Zion Music Lab"
+                        value={newMusicArtist}
+                        onChange={(e) => setNewMusicArtist(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#01040f] border border-cyan-950 focus:border-cyan-400 rounded-xl text-xs text-white outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        카테고리 / 장르
+                      </label>
+                      <select
+                        value={newMusicCategory}
+                        onChange={(e) => setNewMusicCategory(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#01040f] border border-cyan-950 focus:border-cyan-400 rounded-xl text-xs text-white outline-none"
+                      >
+                        <option value="Cyberpunk">Cyberpunk (사이버펑크)</option>
+                        <option value="Robotics Ambient">Robotics Ambient (로봇 앰비언트)</option>
+                        <option value="Lo-Fi Beats">Lo-Fi Beats (코딩 로우파이)</option>
+                        <option value="Epic Future">Epic Future (미래지향 사운드트랙)</option>
+                        <option value="Custom Audio">Custom Audio (사용자 지정 음악)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {musicAddMode === 'url' ? (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        오디오 웹 링크 (MP3, OGG, WAV URL) *
+                      </label>
+                      <input
+                        type="url"
+                        required
+                        placeholder="https://example.com/soundtrack.mp3"
+                        value={newMusicUrl}
+                        onChange={(e) => setNewMusicUrl(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#01040f] border border-cyan-950 focus:border-cyan-400 rounded-xl text-xs text-white font-mono-tech outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        컴퓨터 오디오 파일 선택 (.mp3, .wav, .ogg, .m4a) *
+                      </label>
+                      <div className="flex flex-col sm:flex-row items-center gap-3">
+                        <input
+                          type="file"
+                          accept="audio/*,.mp3,.wav,.ogg,.m4a"
+                          onChange={handleMusicFileUpload}
+                          className="hidden"
+                          id="tab5-audio-file-input"
+                        />
+                        <label
+                          htmlFor="tab5-audio-file-input"
+                          className="w-full sm:w-auto px-4 py-2.5 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-700/60 rounded-xl text-xs font-bold text-cyan-300 flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                        >
+                          <Upload size={14} />
+                          <span>컴퓨터에서 음악 파일 찾기</span>
+                        </label>
+                        <span className="text-xs text-slate-400 truncate max-w-xs">
+                          {musicUploadFileName ? `선택됨: ${musicUploadFileName}` : '선택된 파일 없음'}
+                        </span>
+                      </div>
+                      {musicFileError && (
+                        <p className="text-xs text-rose-400 mt-1 flex items-center gap-1">
+                          <AlertCircle size={12} /> {musicFileError}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 pt-2">
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs rounded-xl shadow-[0_0_12px_rgba(6,182,212,0.4)] transition-all flex items-center gap-1.5"
+                    >
+                      <Plus size={14} />
+                      <span>테마곡 목록에 등록</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            {/* Registered Theme Tracks List */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Disc size={16} className="text-cyan-400" />
+                  <h3 className="text-sm font-bold text-white">
+                    현재 등록된 테마곡 리스트 ({localMusicConfig.tracks.length})
+                  </h3>
+                </div>
+                <span className="text-xs text-slate-400">
+                  💡 [대표곡으로 지정]을 누르면 첫 방문 시 자동 재생되는 대표 테마곡이 변경됩니다.
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {localMusicConfig.tracks.map((track, idx) => {
+                  const isActive = localMusicConfig.activeTrackId === track.id;
+                  const isPreviewing = previewMusicTrackId === track.id;
+
+                  return (
+                    <div
+                      key={track.id}
+                      className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+                        isActive 
+                          ? 'bg-cyan-950/40 border-cyan-500/80 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                          : 'bg-[#030919] border-cyan-950 hover:border-cyan-900'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-mono-tech text-xs font-bold ${
+                          isActive ? 'bg-cyan-400 text-black' : 'bg-cyan-950/80 text-cyan-400'
+                        }`}>
+                          {isPreviewing ? <Disc size={18} className="animate-spin" /> : String(idx + 1).padStart(2, '0')}
+                        </div>
+
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-white">{track.title}</span>
+                            {isActive && (
+                              <span className="px-2 py-0.5 text-[10px] font-bold bg-cyan-500 text-black rounded">
+                                대표 테마곡
+                              </span>
+                            )}
+                            {track.isPreset && (
+                              <span className="px-1.5 py-0.5 text-[9px] font-mono-tech bg-slate-800 text-slate-400 rounded">
+                                PRESET
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-400">
+                            {track.artist} • <span className="text-cyan-400/80">{track.category}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handlePreviewMusicTrack(track)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                            isPreviewing
+                              ? 'bg-amber-400 text-black border-amber-300'
+                              : 'bg-[#01040f] text-slate-300 hover:text-white border-cyan-900 hover:border-cyan-700'
+                          }`}
+                        >
+                          {isPreviewing ? <Pause size={13} fill="black" /> : <Play size={13} />}
+                          <span>{isPreviewing ? '재생 중지' : '미리듣기'}</span>
+                        </button>
+
+                        {!isActive ? (
+                          <button
+                            type="button"
+                            onClick={() => handleSetGlobalActiveTrack(track.id)}
+                            className="px-3 py-1.5 bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 text-xs font-bold rounded-lg transition-colors"
+                          >
+                            대표곡으로 지정
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1 px-3 py-1.5 text-xs text-emerald-400 font-bold">
+                            <CheckCircle2 size={14} />
+                            <span>대표곡 적용중</span>
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMusicTrack(track.id)}
+                          className="p-2 text-rose-400 hover:text-rose-200 hover:bg-rose-950/60 border border-transparent hover:border-rose-900/60 rounded-lg transition-colors"
+                          title="테마곡 삭제"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
+
+      {/* Floating Dedicated Window for Music Management ("다른 창 만들어서") */}
+      <AdminThemeMusicModal
+        isOpen={isMusicModalOpen}
+        onClose={() => setIsMusicModalOpen(false)}
+        musicConfig={localMusicConfig}
+        onSaveConfig={onSaveMusicConfig}
+      />
     </div>
   );
 };

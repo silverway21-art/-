@@ -1,4 +1,4 @@
-import { JourneyItem, SkillItem, ProjectItem, AwardItem } from '../types';
+import { JourneyItem, SkillItem, ProjectItem, AwardItem, ThemeTrack, MusicConfig } from '../types';
 import robotLineTracingImg from '../assets/images/robot_line_tracing_1786709526477.jpg';
 import zionLogoImg from '../assets/images/zion_robot_logo_1786709549858.jpg';
 
@@ -176,4 +176,55 @@ export const DEFAULT_SITE_CONFIG = {
   skillItems: SKILL_ITEMS,
   awardsData: AWARDS_DATA,
 };
+
+export const DEFAULT_MUSIC_CONFIG: MusicConfig = {
+  enabled: true,
+  activeTrackId: 'track_preset_synth_1',
+  defaultVolume: 0.45,
+  loop: true,
+  autoPlayPrompt: true,
+  tracks: [
+    {
+      id: 'track_preset_synth_1',
+      title: 'Neural Matrix Protocol (사이버 앰비언트 신스)',
+      artist: 'Zion Robotics Audio Lab',
+      url: 'synth:cyber-matrix',
+      category: 'Cyberpunk Ambient',
+      duration: 'Procedural Loop',
+      isPreset: true,
+      addedAt: '2026-08-28T00:00:00.000Z'
+    },
+    {
+      id: 'track_preset_synth_2',
+      title: 'Autonomous Pulse (로보틱스 로우파이 비트)',
+      artist: 'Zion Engineering Core',
+      url: 'synth:lofi-pulse',
+      category: 'Lo-Fi Focus',
+      duration: 'Procedural Loop',
+      isPreset: true,
+      addedAt: '2026-08-28T00:00:00.000Z'
+    },
+    {
+      id: 'track_preset_audio_1',
+      title: 'Futuristic Sci-Fi Laboratory Ambient',
+      artist: 'Creative Commons Audio',
+      url: 'https://actions.google.com/sounds/v1/science_fiction/sci_fi_ambient.ogg',
+      category: 'Sci-Fi Sound',
+      duration: '01:30',
+      isPreset: true,
+      addedAt: '2026-08-28T00:00:00.000Z'
+    },
+    {
+      id: 'track_preset_audio_2',
+      title: 'Deep Space Robotics Station Hum',
+      artist: 'Free Sound Archive',
+      url: 'https://actions.google.com/sounds/v1/science_fiction/lab_hum.ogg',
+      category: 'Deep Drone',
+      duration: '01:05',
+      isPreset: true,
+      addedAt: '2026-08-28T00:00:00.000Z'
+    }
+  ]
+};
+
 

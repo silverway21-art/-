@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
-import { Menu, X, Mail, Terminal } from 'lucide-react';
+import { Menu, X, Mail, Terminal, Music } from 'lucide-react';
 import zionLogoImg from '../assets/images/zion_robot_logo_1786709549858.jpg';
 
 interface NavbarProps {
   onOpenConnect: () => void;
   onOpenTerminal: () => void;
+  onOpenThemeMusic?: () => void;
+  isMusicPlaying?: boolean;
+  isMusicEnabled?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenConnect,
   onOpenTerminal,
+  onOpenThemeMusic,
+  isMusicPlaying = false,
+  isMusicEnabled = true,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 

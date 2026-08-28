@@ -1,4 +1,4 @@
-import { ProjectItem, AdminUser, SiteConfig, ContactMessage } from '../types';
+import { ProjectItem, AdminUser, SiteConfig, ContactMessage, ThemeTrack, MusicConfig } from '../types';
 import { db } from './firebase';
 import { 
   collection, 
@@ -9,12 +9,13 @@ import {
   getDocs, 
   deleteDoc 
 } from 'firebase/firestore';
-import { PROJECT_ITEMS, DEFAULT_SITE_CONFIG } from '../data/portfolioData';
+import { PROJECT_ITEMS, DEFAULT_SITE_CONFIG, DEFAULT_MUSIC_CONFIG } from '../data/portfolioData';
 import { addMySentMessageId, getMySentMessageIds } from './visitorSession';
 
 const TOKEN_KEY = 'zion_admin_token_v2';
 const USER_KEY = 'zion_admin_user_v2';
 const SITE_CONFIG_KEY = 'zion_portfolio_site_config_v2';
+const MUSIC_CONFIG_KEY = 'zion_portfolio_music_config_v1';
 
 
 export function getStoredToken(): string | null {
@@ -568,6 +569,138 @@ export function subscribeToSiteConfig(onUpdate: (config: SiteConfig) => void) {
     return () => {};
   }
 }
+
+/**
+ * Fetch theme music configuration (BGM on/off, active theme song, tracks playlist)
+ */
+export async function apiGetMusicConfig(): Promise<MusicConfig> {
+  // 1. Check local storage cache first
+  let cached: MusicConfig | null = null;
+  try {
+    const raw = localStorage.getItem(MUSIC_CONFIG_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.tracks)) {
+        cached = parsed;
+      }
+    }
+  } catch {}
+
+  // 2. Try Express API
+  try {
+    const res = await fetch('/api/music-config');
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      const data = await res.json();
+      if (data.success && data.musicConfig && Array.isArray(data.musicConfig.tracks)) {
+        localStorage.setItem(MUSIC_CONFIG_KEY, JSON.stringify(data.musicConfig));
+        return data.musicConfig;
+      }
+    }
+  } catch {}
+
+  // 3. Direct Firestore lookup
+  try {
+    const docRef = doc(db, 'music_config', 'main');
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const liveData = snap.data() as MusicConfig;
+      if (liveData && Array.isArray(liveData.tracks)) {
+        localStorage.setItem(MUSIC_CONFIG_KEY, JSON.stringify(liveData));
+        return liveData;
+      }
+    }
+  } catch (fsErr) {
+    console.warn('[MusicConfig] Firestore getDoc notice:', fsErr);
+  }
+
+  return cached || DEFAULT_MUSIC_CONFIG;
+}
+
+/**
+ * Admin: Update theme music configuration
+ */
+export async function apiUpdateMusicConfig(
+  newConfig: Partial<MusicConfig>
+): Promise<{ success: boolean; musicConfig?: MusicConfig; message?: string }> {
+  const token = getStoredToken();
+
+  let currentConfig: MusicConfig = DEFAULT_MUSIC_CONFIG;
+  try {
+    const raw = localStorage.getItem(MUSIC_CONFIG_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.tracks)) {
+        currentConfig = parsed;
+      }
+    }
+  } catch {}
+
+  const merged: MusicConfig = {
+    ...currentConfig,
+    ...newConfig,
+    tracks: newConfig.tracks || currentConfig.tracks,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // Cache locally immediately
+  try {
+    localStorage.setItem(MUSIC_CONFIG_KEY, JSON.stringify(merged));
+  } catch (e) {
+    console.warn('LocalStorage music save failed:', e);
+  }
+
+  // 1. Try Express API
+  try {
+    const res = await fetch('/api/admin/music-config', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token || 'vcl_admin'}`,
+      },
+      body: JSON.stringify(merged),
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      const data = await res.json();
+      if (data.success) return { success: true, musicConfig: data.musicConfig || merged };
+    }
+  } catch {}
+
+  // 2. Direct Firestore update
+  try {
+    await setDoc(doc(db, 'music_config', 'main'), merged, { merge: true });
+    return { success: true, musicConfig: merged };
+  } catch (e: any) {
+    console.warn('Direct Firestore music config update notice:', e);
+    return { success: true, musicConfig: merged };
+  }
+}
+
+/**
+ * Real-time subscription to music configuration changes from Firestore
+ */
+export function subscribeToMusicConfig(onUpdate: (config: MusicConfig) => void) {
+  try {
+    const docRef = doc(db, 'music_config', 'main');
+    const unsubscribe = onSnapshot(docRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const liveData = snapshot.data() as MusicConfig;
+        if (liveData && Array.isArray(liveData.tracks)) {
+          localStorage.setItem(MUSIC_CONFIG_KEY, JSON.stringify(liveData));
+          onUpdate(liveData);
+        }
+      }
+    }, (error) => {
+      console.warn('[Firestore] Music config snapshot warning:', error);
+    });
+    return unsubscribe;
+  } catch (e) {
+    console.warn('[Firestore] Music config subscription failed:', e);
+    return () => {};
+  }
+}
+
 
 // ==========================================
 // Contact Messages (Admin Inbox) Client APIs

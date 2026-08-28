@@ -377,6 +377,43 @@ export async function saveSiteConfigToDb(config: any): Promise<boolean> {
   }
 }
 
+// Local cache for Music Config
+let localMusicConfigCache: any = null;
+
+/**
+ * Get Music Config from Firestore
+ */
+export async function getMusicConfigFromDb(): Promise<any> {
+  try {
+    const docRef = doc(serverDb, 'music_config', 'main');
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      localMusicConfigCache = snap.data();
+      return localMusicConfigCache;
+    }
+  } catch (e) {
+    console.warn('[Server DB] Failed to fetch music config from Firestore, using fallback:', e);
+  }
+  return localMusicConfigCache;
+}
+
+/**
+ * Save Music Config to Firestore
+ */
+export async function saveMusicConfigToDb(config: any): Promise<boolean> {
+  try {
+    localMusicConfigCache = config;
+    const docRef = doc(serverDb, 'music_config', 'main');
+    await setDoc(docRef, config, { merge: true });
+    return true;
+  } catch (e) {
+    console.error('[Server DB] Failed to save music config to Firestore:', e);
+    localMusicConfigCache = config;
+    return true;
+  }
+}
+
+
 // ==========================================
 // Contact Messages (Admin Inbox) Support
 // ==========================================

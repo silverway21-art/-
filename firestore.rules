@@ -17,6 +17,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Music & Theme Song Configuration Collection
+    match /music_config/{configId} {
+      allow read, write: if true;
+    }
+
     // Contact Messages Collection: Public can create/send messages, Admin can read/update/delete
     match /contact_messages/{messageId} {
       allow create: if true;
