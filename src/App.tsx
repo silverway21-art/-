@@ -33,7 +33,8 @@ import {
   apiGetSiteConfig,
   apiUpdateSiteConfig,
   subscribeToSiteConfig,
-  getStoredUser
+  getStoredUser,
+  clearSession
 } from './lib/api';
 import { testFirebaseConnection } from './lib/firebase';
 
@@ -207,10 +208,27 @@ export default function App() {
 
   // Site Configuration Update Handler
   const handleSaveSiteConfig = async (newConfig: Partial<SiteConfig>): Promise<boolean> => {
-    setSiteConfig((prev) => ({
-      ...prev,
-      ...newConfig
-    }));
+    let mergedConfig: SiteConfig = siteConfig;
+    setSiteConfig((prev) => {
+      mergedConfig = {
+        ...prev,
+        ...newConfig,
+        portfolioInfo: {
+          ...prev.portfolioInfo,
+          ...(newConfig.portfolioInfo || {})
+        },
+        journeyItems: newConfig.journeyItems || prev.journeyItems,
+        skillItems: newConfig.skillItems || prev.skillItems,
+        awardsData: newConfig.awardsData || prev.awardsData
+      };
+      try {
+        localStorage.setItem(SITE_CONFIG_STORAGE_KEY, JSON.stringify(mergedConfig));
+        localStorage.setItem('zion_site_config_v2', JSON.stringify(mergedConfig));
+      } catch (e) {
+        console.warn('LocalStorage save failed:', e);
+      }
+      return mergedConfig;
+    });
 
     try {
       const res = await apiUpdateSiteConfig(newConfig);

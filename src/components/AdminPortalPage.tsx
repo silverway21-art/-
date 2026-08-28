@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   ShieldCheck, 
   Lock, 
@@ -72,8 +72,6 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
 
   // Site Configuration Form State
   const [editableConfig, setEditableConfig] = useState<SiteConfig>(siteConfig || DEFAULT_SITE_CONFIG);
-  const [isSavingConfig, setIsSavingConfig] = useState(false);
-  const [configSaveSuccess, setConfigSaveSuccess] = useState(false);
   const [siteTextSubTab, setSiteTextSubTab] = useState<'hero' | 'journey' | 'skills' | 'awards' | 'footer'>('hero');
 
   // Keep editableConfig in sync if external siteConfig updates
@@ -107,40 +105,31 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
     }
   };
 
-  const handleSaveAllSiteConfig = async () => {
-    setIsSavingConfig(true);
-    setConfigSaveSuccess(false);
-    try {
-      const ok = await onSaveSiteConfig(editableConfig);
-      if (ok) {
-        setConfigSaveSuccess(true);
-        setTimeout(() => setConfigSaveSuccess(false), 4000);
-      }
-    } catch (e) {
-      console.error('Failed to save site config:', e);
-    } finally {
-      setIsSavingConfig(false);
-    }
-  };
+  // Central sync helper to ensure instant reflection on public/default window
+  const applyAndSyncConfig = useCallback((updated: SiteConfig) => {
+    setEditableConfig(updated);
+    onSaveSiteConfig(updated);
+  }, [onSaveSiteConfig]);
 
   const handleResetToDefaults = () => {
     if (window.confirm('모든 텍스트와 설정을 초기 기본값으로 되돌리시겠습니까?')) {
-      setEditableConfig(DEFAULT_SITE_CONFIG);
+      applyAndSyncConfig(DEFAULT_SITE_CONFIG);
     }
   };
 
-  // Helper for Hero/Bio fields
+  // Helper for Hero/Bio fields - immediate real-time sync
   const handleHeroChange = (field: string, value: string) => {
-    setEditableConfig(prev => ({
-      ...prev,
+    const updated: SiteConfig = {
+      ...editableConfig,
       portfolioInfo: {
-        ...prev.portfolioInfo,
+        ...editableConfig.portfolioInfo,
         [field]: value
       }
-    }));
+    };
+    applyAndSyncConfig(updated);
   };
 
-  // Journey CRUD
+  // Journey CRUD - immediate real-time sync
   const handleAddJourneyItem = () => {
     const newItem: JourneyItem = {
       id: `journey-${Date.now()}`,
@@ -156,31 +145,36 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
       weakness: '모터 발열 튜닝 필요',
       review: '알고리즘 정밀 제어 학습'
     };
-    setEditableConfig(prev => ({
-      ...prev,
-      journeyItems: [newItem, ...prev.journeyItems]
-    }));
+    const updated: SiteConfig = {
+      ...editableConfig,
+      journeyItems: [newItem, ...editableConfig.journeyItems]
+    };
+    applyAndSyncConfig(updated);
   };
 
   const handleUpdateJourneyItem = (index: number, field: keyof JourneyItem, value: any) => {
-    setEditableConfig(prev => {
-      const updated = [...prev.journeyItems];
-      updated[index] = {
-        ...updated[index],
-        [field]: value
-      };
-      return { ...prev, journeyItems: updated };
-    });
+    const updatedJourney = [...editableConfig.journeyItems];
+    updatedJourney[index] = {
+      ...updatedJourney[index],
+      [field]: value
+    };
+    const updated: SiteConfig = {
+      ...editableConfig,
+      journeyItems: updatedJourney
+    };
+    applyAndSyncConfig(updated);
   };
 
   const handleDeleteJourneyItem = (index: number) => {
-    setEditableConfig(prev => {
-      const updated = prev.journeyItems.filter((_, i) => i !== index);
-      return { ...prev, journeyItems: updated };
-    });
+    const updatedJourney = editableConfig.journeyItems.filter((_, i) => i !== index);
+    const updated: SiteConfig = {
+      ...editableConfig,
+      journeyItems: updatedJourney
+    };
+    applyAndSyncConfig(updated);
   };
 
-  // Skills CRUD
+  // Skills CRUD - immediate real-time sync
   const handleAddSkillItem = () => {
     const newSkill: SkillItem = {
       id: `skill-${Date.now()}`,
@@ -192,31 +186,36 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
       tags: ['NEW', 'CODE'],
       details: '상세 알고리즘 구현 및 로봇 적용 경험'
     };
-    setEditableConfig(prev => ({
-      ...prev,
-      skillItems: [...prev.skillItems, newSkill]
-    }));
+    const updated: SiteConfig = {
+      ...editableConfig,
+      skillItems: [...editableConfig.skillItems, newSkill]
+    };
+    applyAndSyncConfig(updated);
   };
 
   const handleUpdateSkillItem = (index: number, field: keyof SkillItem, value: any) => {
-    setEditableConfig(prev => {
-      const updated = [...prev.skillItems];
-      updated[index] = {
-        ...updated[index],
-        [field]: value
-      };
-      return { ...prev, skillItems: updated };
-    });
+    const updatedSkills = [...editableConfig.skillItems];
+    updatedSkills[index] = {
+      ...updatedSkills[index],
+      [field]: value
+    };
+    const updated: SiteConfig = {
+      ...editableConfig,
+      skillItems: updatedSkills
+    };
+    applyAndSyncConfig(updated);
   };
 
   const handleDeleteSkillItem = (index: number) => {
-    setEditableConfig(prev => {
-      const updated = prev.skillItems.filter((_, i) => i !== index);
-      return { ...prev, skillItems: updated };
-    });
+    const updatedSkills = editableConfig.skillItems.filter((_, i) => i !== index);
+    const updated: SiteConfig = {
+      ...editableConfig,
+      skillItems: updatedSkills
+    };
+    applyAndSyncConfig(updated);
   };
 
-  // Awards Target CRUD
+  // Awards Target CRUD - immediate real-time sync
   const handleAddAwardItem = () => {
     const newAward: AwardItem = {
       id: `award-${Date.now()}`,
@@ -226,28 +225,33 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
       category: 'Autonomous Navigation',
       status: 'TARGET_GOAL'
     };
-    setEditableConfig(prev => ({
-      ...prev,
-      awardsData: [...prev.awardsData, newAward]
-    }));
+    const updated: SiteConfig = {
+      ...editableConfig,
+      awardsData: [...editableConfig.awardsData, newAward]
+    };
+    applyAndSyncConfig(updated);
   };
 
   const handleUpdateAwardItem = (index: number, field: keyof AwardItem, value: any) => {
-    setEditableConfig(prev => {
-      const updated = [...prev.awardsData];
-      updated[index] = {
-        ...updated[index],
-        [field]: value
-      };
-      return { ...prev, awardsData: updated };
-    });
+    const updatedAwards = [...editableConfig.awardsData];
+    updatedAwards[index] = {
+      ...updatedAwards[index],
+      [field]: value
+    };
+    const updated: SiteConfig = {
+      ...editableConfig,
+      awardsData: updatedAwards
+    };
+    applyAndSyncConfig(updated);
   };
 
   const handleDeleteAwardItem = (index: number) => {
-    setEditableConfig(prev => {
-      const updated = prev.awardsData.filter((_, i) => i !== index);
-      return { ...prev, awardsData: updated };
-    });
+    const updatedAwards = editableConfig.awardsData.filter((_, i) => i !== index);
+    const updated: SiteConfig = {
+      ...editableConfig,
+      awardsData: updatedAwards
+    };
+    applyAndSyncConfig(updated);
   };
 
   const handleReturnHome = () => {
@@ -617,81 +621,48 @@ export const AdminPortalPage: React.FC<AdminPortalPageProps> = ({
         {/* ===================== TAB 2: SITE TEXT & INTERFACE CMS ===================== */}
         {activeTab === 'site_text' && (
           <div className="space-y-6 animate-in fade-in">
-            {/* Top Toolbar for CMS */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#040c20]/80 border border-cyan-900/80 rounded-2xl p-5 backdrop-blur-md">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-xs text-cyan-400 font-bold">
-                  <Sliders size={14} />
-                  <span>TOTAL SITE CONTENT & UI CONTROLLER</span>
-                </div>
-                <h1 className="text-xl sm:text-2xl font-bold text-white">
-                  기본 모드의 모든 텍스트 및 인터페이스 편집
-                </h1>
-                <p className="text-xs text-slate-400">
-                  헤로 타이틀, 한줄 소개, 지향점, 대회 참가 여정, 기술 스택, 수상 목표, 푸터 등 모든 영역을 변경할 수 있습니다.
-                </p>
+            {/* Sub-tabs for specific sections with Live Sync status */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-cyan-950 pb-3">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: 'hero', label: '1. 메인 프로필 & Hero', icon: FileText },
+                  { id: 'journey', label: `2. 대회 참가 여정 (${editableConfig.journeyItems.length})`, icon: Rocket },
+                  { id: 'skills', label: `3. 기술 스택 (${editableConfig.skillItems.length})`, icon: Wrench },
+                  { id: 'awards', label: `4. 수상 내역 & 목표 (${editableConfig.awardsData.length})`, icon: Trophy },
+                  { id: 'footer', label: '5. 푸터 & 정책', icon: Globe },
+                ].map((tab) => {
+                  const IconComponent = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setSiteTextSubTab(tab.id as any)}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                        siteTextSubTab === tab.id
+                          ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/80 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                          : 'bg-[#030814] text-slate-400 hover:text-white border border-cyan-950'
+                      }`}
+                    >
+                      <IconComponent size={13} />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <div className="flex items-center gap-1.5 text-[11px] font-mono-tech text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 px-2.5 py-1.5 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>기본 창 실시간 즉시 반영 중</span>
+                </div>
                 <button
                   onClick={handleResetToDefaults}
-                  className="px-3.5 py-2.5 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/60 text-slate-300 hover:text-white border border-cyan-900 text-xs flex items-center gap-1.5 transition-all"
+                  className="px-2.5 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-rose-950/50 text-slate-400 hover:text-rose-400 border border-cyan-900/60 hover:border-rose-900/60 text-[11px] font-mono-tech flex items-center gap-1 transition-all"
+                  title="모든 텍스트 초기 기본값으로 복원"
                 >
-                  <RotateCcw size={14} />
-                  <span>기본값 초기화</span>
-                </button>
-
-                <button
-                  onClick={handleSaveAllSiteConfig}
-                  disabled={isSavingConfig}
-                  className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs flex items-center gap-2 shadow-[0_0_25px_rgba(6,182,212,0.4)] transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {isSavingConfig ? (
-                    <>
-                      <RefreshCw size={15} className="animate-spin text-black" />
-                      <span>저장 중...</span>
-                    </>
-                  ) : configSaveSuccess ? (
-                    <>
-                      <Check size={15} className="text-emerald-950 stroke-[3]" />
-                      <span>사이트에 반영 완료!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save size={15} />
-                      <span>전체 텍스트 저장 & 즉시 반영</span>
-                    </>
-                  )}
+                  <RotateCcw size={12} />
+                  <span>초기화</span>
                 </button>
               </div>
-            </div>
-
-            {/* Sub-tabs for specific sections */}
-            <div className="flex flex-wrap gap-2 border-b border-cyan-950 pb-3">
-              {[
-                { id: 'hero', label: '1. 메인 프로필 & Hero', icon: FileText },
-                { id: 'journey', label: `2. 대회 참가 여정 (${editableConfig.journeyItems.length})`, icon: Rocket },
-                { id: 'skills', label: `3. 기술 스택 (${editableConfig.skillItems.length})`, icon: Wrench },
-                { id: 'awards', label: `4. 수상 내역 & 목표 (${editableConfig.awardsData.length})`, icon: Trophy },
-                { id: 'footer', label: '5. 푸터 & 정책', icon: Globe },
-              ].map((tab) => {
-                const IconComponent = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setSiteTextSubTab(tab.id as any)}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                      siteTextSubTab === tab.id
-                        ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/80 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
-                        : 'bg-[#030814] text-slate-400 hover:text-white border border-cyan-950'
-                    }`}
-                  >
-                    <IconComponent size={13} />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
             </div>
 
             {/* ================= SECTION 1: HERO & BIO ================= */}
