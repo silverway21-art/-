@@ -380,32 +380,13 @@ export async function saveSiteConfigToDb(config: any): Promise<boolean> {
 // ==========================================
 // Contact Messages (Admin Inbox) Support
 // ==========================================
-const INITIAL_MESSAGES: ContactMessage[] = [
-  {
-    id: 'msg_init_kaist_mentor',
-    senderName: '이동현 연구원 (KAIST 로보틱스 연구실)',
-    email: 'dh.lee.robotics@kaist.ac.kr',
-    subject: '로봇 기구학 및 역기구학 시뮬레이션 제어 알고리즘 멘토링 제휴',
-    message: '안녕하세요, 김지온 학생. 포트폴리오에 등록된 Inverse Kinematics 2축 로봇 암과 자율주행 AGV 경로 탐색 프로젝트 코드를 인상 깊게 살펴보았습니다. 고등학교/청소년 로봇 경진대회 준비 및 모터 토크 튜닝 관련하여 온/오프라인 멘토링 및 실험 장비 지원이 가능하니 편하게 연락 바랍니다.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-    read: false,
-    starred: true,
-    replied: false,
-  },
-  {
-    id: 'msg_init_competition_org',
-    senderName: '2026 청소년 로봇 페스티벌 조직위원회',
-    email: 'info@korea-robot-festival.org',
-    subject: '2026 자율주행 탐사 로봇 경진대회 사전 참가 신청 접수 안내',
-    message: '김지온 학생, 2026 자율주행 탐사 로봇 부문 참가 접수 및 기술 보고서 초안이 정상 확인되었습니다. LiDAR-SLAM 매핑 센서 데이터와 하드웨어 BOM 규격이 적합하게 통과되었음을 안내드립니다. 본선 대회장 부스 배정은 대회 2주 전에 발송됩니다.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(), // 1 day ago
-    read: true,
-    starred: false,
-    replied: true,
-  }
-];
+const INITIAL_MESSAGES: ContactMessage[] = [];
 
-let localMessagesCache: ContactMessage[] = [...INITIAL_MESSAGES];
+let localMessagesCache: ContactMessage[] = [];
+
+// Ensure legacy mock messages are not shown
+serverDeletedMessageIds.add('msg_init_kaist_mentor');
+serverDeletedMessageIds.add('msg_init_competition_org');
 
 /**
  * Get all contact messages from Firestore, sorted by createdAt desc
@@ -439,25 +420,32 @@ export async function getMessagesFromDb(): Promise<ContactMessage[]> {
  * Save new contact message to Firestore
  */
 export async function saveMessageToDb(msg: ContactMessage): Promise<boolean> {
+  const clean: any = { ...msg };
+  for (const key of Object.keys(clean)) {
+    if (clean[key] === undefined) {
+      delete clean[key];
+    }
+  }
+
   try {
-    const docRef = doc(serverDb, 'contact_messages', msg.id);
-    await setDoc(docRef, msg);
+    const docRef = doc(serverDb, 'contact_messages', clean.id);
+    await setDoc(docRef, clean);
     // Update local cache
-    const existingIdx = localMessagesCache.findIndex(m => m.id === msg.id);
+    const existingIdx = localMessagesCache.findIndex(m => m.id === clean.id);
     if (existingIdx >= 0) {
-      localMessagesCache[existingIdx] = msg;
+      localMessagesCache[existingIdx] = clean as ContactMessage;
     } else {
-      localMessagesCache.unshift(msg);
+      localMessagesCache.unshift(clean as ContactMessage);
     }
     return true;
   } catch (e) {
     console.error('[Server DB] Failed to save message to Firestore:', e);
     // Save to local cache anyway
-    const existingIdx = localMessagesCache.findIndex(m => m.id === msg.id);
+    const existingIdx = localMessagesCache.findIndex(m => m.id === clean.id);
     if (existingIdx >= 0) {
-      localMessagesCache[existingIdx] = msg;
+      localMessagesCache[existingIdx] = clean as ContactMessage;
     } else {
-      localMessagesCache.unshift(msg);
+      localMessagesCache.unshift(clean as ContactMessage);
     }
     return true;
   }
@@ -467,20 +455,27 @@ export async function saveMessageToDb(msg: ContactMessage): Promise<boolean> {
  * Update message status (e.g. read, starred, replied)
  */
 export async function updateMessageStatusInDb(id: string, updates: Partial<ContactMessage>): Promise<boolean> {
+  const cleanUpdates: any = { ...updates };
+  for (const key of Object.keys(cleanUpdates)) {
+    if (cleanUpdates[key] === undefined) {
+      delete cleanUpdates[key];
+    }
+  }
+
   try {
     const docRef = doc(serverDb, 'contact_messages', id);
-    await setDoc(docRef, updates, { merge: true });
+    await setDoc(docRef, cleanUpdates, { merge: true });
     // Update local cache
     const existingIdx = localMessagesCache.findIndex(m => m.id === id);
     if (existingIdx >= 0) {
-      localMessagesCache[existingIdx] = { ...localMessagesCache[existingIdx], ...updates };
+      localMessagesCache[existingIdx] = { ...localMessagesCache[existingIdx], ...cleanUpdates };
     }
     return true;
   } catch (e) {
     console.error('[Server DB] Failed to update message in Firestore:', e);
     const existingIdx = localMessagesCache.findIndex(m => m.id === id);
     if (existingIdx >= 0) {
-      localMessagesCache[existingIdx] = { ...localMessagesCache[existingIdx], ...updates };
+      localMessagesCache[existingIdx] = { ...localMessagesCache[existingIdx], ...cleanUpdates };
     }
     return true;
   }

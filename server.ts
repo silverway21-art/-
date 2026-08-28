@@ -185,7 +185,7 @@ app.delete('/api/admin/projects/:id', requireAdminAuth, async (req, res) => {
 // Public: Send new message from default window Connect Modal
 app.post('/api/messages', async (req, res) => {
   try {
-    const { senderName, email, message, subject } = req.body;
+    const { senderName, email, message, subject, visitorId, accessCode } = req.body;
     if (!senderName || !message) {
       return res.status(400).json({ success: false, message: '발신자 성함과 메시지 내용을 입력해 주세요.' });
     }
@@ -200,6 +200,8 @@ app.post('/api/messages', async (req, res) => {
       read: false,
       starred: false,
       replied: false,
+      visitorId: visitorId ? String(visitorId).trim() : undefined,
+      accessCode: accessCode ? String(accessCode).trim() : undefined,
     };
 
     await saveMessageToDb(newMsg);
@@ -207,6 +209,62 @@ app.post('/api/messages', async (req, res) => {
     return res.json({ success: true, message: newMsg });
   } catch (err: any) {
     console.error('Send message error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin In-App Direct Reply Endpoint
+app.post('/api/messages/:id/reply', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { replyText, replyAuthor } = req.body;
+    if (!replyText || !replyText.trim()) {
+      return res.status(400).json({ success: false, message: '답변 내용을 입력해 주세요.' });
+    }
+
+    const updates = {
+      replyText: replyText.trim(),
+      repliedAt: new Date().toISOString(),
+      replyAuthor: replyAuthor ? String(replyAuthor).trim() : '김지온 (로봇 연구원)',
+      replied: true,
+    };
+
+    await updateMessageStatusInDb(id, updates);
+    console.log(`[Messages] Admin replied to message ${id}`);
+    return res.json({ success: true, id, updates });
+  } catch (err: any) {
+    console.error('Reply message error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Visitor Private Inquiries: Query ONLY messages belonging to this visitor
+app.get('/api/messages/my', async (req, res) => {
+  try {
+    const { visitorId, email, accessCode } = req.query;
+    if (!visitorId && !email) {
+      return res.json({ success: true, messages: [] });
+    }
+
+    const allMessages = await getMessagesFromDb();
+    
+    // Strict isolation: only return messages that belong to this visitor
+    const myMessages = allMessages.filter(m => {
+      if (visitorId && m.visitorId && m.visitorId === String(visitorId)) {
+        return true;
+      }
+      if (email && m.email && m.email.trim().toLowerCase() === String(email).trim().toLowerCase()) {
+        if (m.accessCode && accessCode) {
+          return m.accessCode === String(accessCode).trim();
+        }
+        return true;
+      }
+      return false;
+    });
+
+    return res.json({ success: true, messages: myMessages });
+  } catch (err: any) {
+    console.error('Fetch my messages error:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

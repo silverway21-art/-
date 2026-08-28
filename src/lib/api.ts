@@ -10,6 +10,7 @@ import {
   deleteDoc 
 } from 'firebase/firestore';
 import { PROJECT_ITEMS, DEFAULT_SITE_CONFIG } from '../data/portfolioData';
+import { addMySentMessageId, getMySentMessageIds } from './visitorSession';
 
 const TOKEN_KEY = 'zion_admin_token_v2';
 const USER_KEY = 'zion_admin_user_v2';
@@ -578,9 +579,16 @@ const DELETED_MESSAGES_KEY = 'zion_deleted_messages_blacklist_v1';
 export function getDeletedMessageIds(): Set<string> {
   try {
     const raw = localStorage.getItem(DELETED_MESSAGES_KEY);
-    return raw ? new Set(JSON.parse(raw)) : new Set();
+    const set = raw ? new Set<string>(JSON.parse(raw)) : new Set<string>();
+    // Ensure initial test messages are permanently excluded
+    set.add('msg_init_kaist_mentor');
+    set.add('msg_init_competition_org');
+    return set;
   } catch {
-    return new Set();
+    const set = new Set<string>();
+    set.add('msg_init_kaist_mentor');
+    set.add('msg_init_competition_org');
+    return set;
   }
 }
 
@@ -594,30 +602,7 @@ export function addDeletedMessageId(id: string) {
   }
 }
 
-export const INITIAL_CLIENT_MESSAGES: ContactMessage[] = [
-  {
-    id: 'msg_init_kaist_mentor',
-    senderName: '이동현 연구원 (KAIST 로보틱스 연구실)',
-    email: 'dh.lee.robotics@kaist.ac.kr',
-    subject: '로봇 기구학 및 역기구학 시뮬레이션 제어 알고리즘 멘토링 제휴',
-    message: '안녕하세요, 김지온 학생. 포트폴리오에 등록된 Inverse Kinematics 2축 로봇 암과 자율주행 AGV 경로 탐색 프로젝트 코드를 인상 깊게 살펴보았습니다. 고등학교/청소년 로봇 경진대회 준비 및 모터 토크 튜닝 관련하여 온/오프라인 멘토링 및 실험 장비 지원이 가능하니 편하게 연락 바랍니다.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    read: false,
-    starred: true,
-    replied: false,
-  },
-  {
-    id: 'msg_init_competition_org',
-    senderName: '2026 청소년 로봇 페스티벌 조직위원회',
-    email: 'info@korea-robot-festival.org',
-    subject: '2026 자율주행 탐사 로봇 경진대회 사전 참가 신청 접수 안내',
-    message: '김지온 학생, 2026 자율주행 탐사 로봇 부문 참가 접수 및 기술 보고서 초안이 정상 확인되었습니다. LiDAR-SLAM 매핑 센서 데이터와 하드웨어 BOM 규격이 적합하게 통과되었음을 안내드립니다. 본선 대회장 부스 배정은 대회 2주 전에 발송됩니다.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
-    read: true,
-    starred: false,
-    replied: true,
-  }
-];
+export const INITIAL_CLIENT_MESSAGES: ContactMessage[] = [];
 
 export function getCachedMessages(): ContactMessage[] {
   const deletedIds = getDeletedMessageIds();
@@ -630,7 +615,7 @@ export function getCachedMessages(): ContactMessage[] {
       }
     }
   } catch {}
-  return INITIAL_CLIENT_MESSAGES.filter(m => !deletedIds.has(m.id));
+  return [];
 }
 
 export function saveCachedMessages(messages: ContactMessage[]) {
@@ -649,6 +634,8 @@ export async function apiSendMessage(data: {
   email: string;
   message: string;
   subject?: string;
+  visitorId?: string;
+  accessCode?: string;
 }): Promise<{ success: boolean; message: ContactMessage }> {
   const newMsg: ContactMessage = {
     id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -660,17 +647,26 @@ export async function apiSendMessage(data: {
     read: false,
     starred: false,
     replied: false,
+    visitorId: data.visitorId ? String(data.visitorId).trim() : undefined,
+    accessCode: data.accessCode ? String(data.accessCode).trim() : undefined,
   };
+
+  // Register in visitor's local history for immediate lookup
+  addMySentMessageId(newMsg.id);
 
   // 1. Save to local cache immediately
   const current = getCachedMessages();
   const updated = [newMsg, ...current.filter(m => m.id !== newMsg.id)];
   saveCachedMessages(updated);
 
-  // 2. Direct Firestore write
+  // 2. Direct Firestore write (clean undefined fields)
   try {
+    const cleanDoc: any = { ...newMsg };
+    for (const k of Object.keys(cleanDoc)) {
+      if (cleanDoc[k] === undefined) delete cleanDoc[k];
+    }
     const docRef = doc(db, 'contact_messages', newMsg.id);
-    await setDoc(docRef, newMsg);
+    await setDoc(docRef, cleanDoc);
   } catch (err) {
     console.warn('[Firestore] Direct write message notice:', err);
   }
@@ -687,6 +683,96 @@ export async function apiSendMessage(data: {
   }
 
   return { success: true, message: newMsg };
+}
+
+/**
+ * Admin directly sends an in-app reply to a message
+ */
+export async function apiSendAdminReply(
+  messageId: string,
+  replyText: string,
+  replyAuthor: string = '김지온 (로봇 연구원)'
+): Promise<boolean> {
+  const updates: Partial<ContactMessage> = {
+    replyText: replyText.trim(),
+    repliedAt: new Date().toISOString(),
+    replyAuthor: replyAuthor.trim(),
+    replied: true,
+  };
+
+  // 1. Update local cache
+  const current = getCachedMessages();
+  const updated = current.map(m => m.id === messageId ? { ...m, ...updates } : m);
+  saveCachedMessages(updated);
+
+  // 2. Direct Firestore update
+  try {
+    const docRef = doc(db, 'contact_messages', messageId);
+    await setDoc(docRef, updates, { merge: true });
+  } catch (e) {
+    console.warn('[Firestore] Direct reply notice:', e);
+  }
+
+  // 3. Express server API reply
+  try {
+    await fetch(`/api/messages/${messageId}/reply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ replyText, replyAuthor })
+    });
+  } catch (e) {
+    console.warn('[API] Server reply notice:', e);
+  }
+
+  return true;
+}
+
+/**
+ * Visitor retrieves only their own inquiries and replies
+ * Guarantees zero visibility into any other visitor's inquiries
+ */
+export async function apiGetMyInquiries(
+  visitorId?: string,
+  email?: string,
+  accessCode?: string
+): Promise<ContactMessage[]> {
+  const mySentIds = new Set(getMySentMessageIds());
+  const deletedIds = getDeletedMessageIds();
+
+  // Try server API first
+  try {
+    const params = new URLSearchParams();
+    if (visitorId) params.append('visitorId', visitorId);
+    if (email) params.append('email', email.trim());
+    if (accessCode) params.append('accessCode', accessCode.trim());
+
+    const res = await fetch(`/api/messages/my?${params.toString()}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.messages)) {
+        return data.messages.filter((m: ContactMessage) => !deletedIds.has(m.id));
+      }
+    }
+  } catch (e) {
+    console.warn('[API] Fetch my messages fallback to local/Firestore:', e);
+  }
+
+  // Fallback: check locally cached messages and filter strictly
+  const allCached = getCachedMessages();
+  const filtered = allCached.filter(m => {
+    if (deletedIds.has(m.id)) return false;
+    if (mySentIds.has(m.id)) return true;
+    if (visitorId && m.visitorId && m.visitorId === visitorId) return true;
+    if (email && m.email && m.email.trim().toLowerCase() === email.trim().toLowerCase()) {
+      if (accessCode && m.accessCode) {
+        return m.accessCode === accessCode.trim();
+      }
+      return true;
+    }
+    return false;
+  });
+
+  return filtered;
 }
 
 /**

@@ -110,5 +110,10 @@ export interface ContactMessage {
   read: boolean;
   starred?: boolean;
   replied?: boolean;
+  replyText?: string;
+  repliedAt?: string;
+  replyAuthor?: string;
+  visitorId?: string;
+  accessCode?: string;
 }
 
